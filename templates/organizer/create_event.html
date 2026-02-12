@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Event - EventSnap{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Back Button -->
+    <a href="{{ url_for('organizer_dashboard') }}" class="inline-flex items-center text-gray-400 hover:text-white mb-8 transition group">
+        <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center mr-3 group-hover:bg-indigo-600 group-hover:text-white transition">
+            <i class="fas fa-arrow-left text-sm"></i>
+        </div>
+        <span class="font-medium">Back to Dashboard</span>
+    </a>
+
+    <!-- Main Card -->
+    <div class="glass p-8 md:p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden border border-white/5" data-aos="fade-up">
+        <!-- Decoration -->
+        <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-[80px] -mr-20 -mt-20"></div>
+
+        <div class="relative z-10">
+            <div class="mb-10">
+                <h1 class="text-3xl md:text-4xl font-black text-white mb-2">Create New Event</h1>
+                <p class="text-gray-400">Fill in the details to launch your campus gallery.</p>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                <!-- Event Name -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Event Name</label>
+                    <input type="text" name="name" required 
+                           class="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-indigo-500 focus:bg-white/10 transition-all outline-none"
+                           placeholder="e.g. Annual Tech Fest 2024">
+                </div>
+
+                <!-- Description -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Short Description</label>
+                    <textarea name="description" rows="3"
+                              class="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-indigo-500 focus:bg-white/10 transition-all outline-none"
+                              placeholder="Tell viewers what this event is about..."></textarea>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Venue -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Venue</label>
+                        <div class="relative">
+                            <i class="fas fa-map-marker-alt absolute left-5 top-5 text-gray-500"></i>
+                            <input type="text" name="venue" required 
+                                   class="w-full pl-12 pr-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-indigo-500 transition-all outline-none"
+                                   placeholder="Main Auditorium">
+                        </div>
+                    </div>
+
+                    <!-- Date & Time -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Date & Time</label>
+                        <div class="relative">
+                            <i class="fas fa-calendar-alt absolute left-5 top-5 text-gray-500"></i>
+                            <input type="datetime-local" name="event_date" required 
+                                   class="w-full pl-12 pr-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white focus:border-indigo-500 transition-all outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Event Type -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Privacy Setting</label>
+                        <div class="relative">
+                            <select name="event_type" required 
+                                    class="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white appearance-none cursor-pointer focus:border-indigo-500 outline-none">
+                                <option value="public" class="bg-slate-900">Public (Visible to All)</option>
+                                <option value="private" class="bg-slate-900">Private (Requires Code)</option>
+                            </select>
+                            <i class="fas fa-chevron-down absolute right-5 top-5 text-gray-500 pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <!-- Poster Upload -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase tracking-widest text-indigo-400 ml-1">Event Poster</label>
+                        <label class="flex items-center justify-center w-full px-5 py-4 rounded-2xl bg-white/5 border border-dashed border-white/20 text-gray-400 hover:bg-white/10 hover:border-indigo-500/50 transition-all cursor-pointer">
+                            <i class="fas fa-image mr-3"></i>
+                            <span id="file-name" class="text-sm">Choose Image...</span>
+                            <input type="file" name="poster" accept="image/*" class="hidden" onchange="updateFileName(this)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="w-full py-5 mt-4 bg-white text-slate-950 font-black text-sm uppercase tracking-[0.2em] rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:bg-indigo-500 hover:text-white hover:shadow-indigo-500/30 transition-all duration-300 transform active:scale-95">
+                    Launch Event Gallery
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Alert Box -->
+    <div class="mt-8 p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex items-start gap-4" data-aos="fade-up">
+        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+            <i class="fas fa-shield-halved"></i>
+        </div>
+        <div>
+            <p class="text-white text-sm font-bold mb-1">Approval Required</p>
+            <p class="text-gray-500 text-xs leading-relaxed">Your event will be sent to the college administrator for review. Once approved, you can start adding volunteers and uploading live photos.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updateFileName(input) {
+        const fileName = input.files[0] ? input.files[0].name : "Choose Image...";
+        document.getElementById('file-name').textContent = fileName;
+        document.getElementById('file-name').classList.add('text-white');
+    }
+</script>
+{% endblock %}

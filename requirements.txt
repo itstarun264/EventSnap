@@ -1,0 +1,10 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Werkzeug
+Pillow
+numpy
+opencv-python
+face-recognition
+dlib
+cmake

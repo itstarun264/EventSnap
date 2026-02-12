@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+
+{% block title %}My Feed - EventSnap{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6" data-aos="fade-down">
+    <div>
+        <h1 class="text-4xl md:text-5xl font-black text-white mb-3 tracking-tight">
+            Hello, <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">{{ current_user.name.split(' ')[0] }}</span>
+        </h1>
+        <p class="text-gray-400 text-lg">Your campus memories, curated just for you.</p>
+    </div>
+    
+    <!-- Quick Unlock Button (Mobile Friendly) -->
+    <button onclick="document.getElementById('unlockModal').classList.remove('hidden')" 
+            class="px-6 py-3 rounded-xl glass text-white font-bold border border-white/10 hover:bg-white/10 transition flex items-center shadow-lg">
+        <i class="fas fa-key mr-2 text-purple-400"></i> Unlock Gallery
+    </button>
+</div>
+
+<!-- Events Grid -->
+{% if events %}
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+    {% for event in events %}
+        {% set is_private = event.event_type == 'private' %}
+        {% set is_unlocked = event.id in unlocked_ids %}
+        {% set is_completed = event.status == 'completed' %}
+        
+        <!-- CARD CLICK LOGIC -->
+        <!-- If Private AND Not Unlocked -> Open Modal -->
+        <!-- Otherwise -> Go to Gallery -->
+        <div data-aos="fade-up" data-aos-delay="{{ loop.index * 50 }}">
+            <a {% if is_private and not is_unlocked %} 
+                    href="javascript:void(0)" onclick="openUnlockModal('{{ event.id }}', '{{ event.name }}')"
+               {% else %} 
+                    href="{{ url_for('event_gallery', event_id=event.id) }}" 
+               {% endif %}
+               class="group block h-full">
+               
+                <div class="glass rounded-[2rem] overflow-hidden border border-white/5 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-purple-900/20 hover:border-purple-500/30 h-full flex flex-col relative bg-slate-900/40">
+                    
+                    <!-- STATUS BADGES -->
+                    <div class="absolute top-4 right-4 z-20 flex flex-col gap-2 items-end">
+                        {% if is_completed %}
+                            <span class="px-3 py-1 rounded-full bg-gray-600/90 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/10 shadow-lg">
+                                <i class="fas fa-archive mr-1"></i> Archived
+                            </span>
+                        {% elif event.is_live %}
+                            <span class="px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg animate-pulse">
+                                <span class="w-1.5 h-1.5 rounded-full bg-white inline-block mr-1"></span> LIVE
+                            </span>
+                        {% endif %}
+
+                        <!-- Privacy Badge -->
+                        {% if is_private %}
+                            {% if is_unlocked %}
+                                <span class="px-3 py-1 rounded-full bg-green-500/90 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-lg">
+                                    <i class="fas fa-unlock mr-1"></i> Unlocked
+                                </span>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20 shadow-lg">
+                                    <i class="fas fa-lock mr-1"></i> Private
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            <span class="px-3 py-1 rounded-full bg-blue-500/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-lg">
+                                Public
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- IMAGE AREA -->
+                    <div class="h-64 relative overflow-hidden bg-slate-800">
+                        {% if event.poster_filename %}
+                            <img src="{{ url_for('static', filename='uploads/posters/' ~ event.poster_filename) }}" 
+                                 class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 {% if is_private and not is_unlocked %}grayscale opacity-40{% endif %}">
+                        {% else %}
+                            <div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                                <i class="fas fa-images text-6xl text-white/5 group-hover:text-white/10 transition duration-500"></i>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Lock Overlay -->
+                        {% if is_private and not is_unlocked %}
+                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px]">
+                                <div class="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white mb-3 group-hover:scale-110 transition shadow-2xl">
+                                    <i class="fas fa-lock text-2xl"></i>
+                                </div>
+                                <span class="text-xs font-bold text-white uppercase tracking-widest opacity-80">Access Required</span>
+                            </div>
+                        {% else %}
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-90"></div>
+                        {% endif %}
+                    </div>
+
+                    <!-- CONTENT AREA -->
+                    <div class="p-8 pt-4 flex-grow flex flex-col justify-between relative -mt-6">
+                        <div>
+                            <p class="text-blue-400 text-xs font-black uppercase tracking-widest mb-2">{{ event.event_date.strftime('%B %d') }}</p>
+                            <h3 class="text-2xl font-bold text-white leading-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-blue-400 group-hover:to-purple-400 transition-all duration-300 mb-3">{{ event.name }}</h3>
+                            <p class="text-gray-400 text-sm line-clamp-2 mb-6 leading-relaxed">{{ event.description or 'Join us to explore the moments captured at this event.' }}</p>
+                        </div>
+                        
+                        <div class="flex items-center justify-between pt-6 border-t border-white/10 mt-auto">
+                            <span class="text-gray-500 text-xs font-bold flex items-center uppercase tracking-wide">
+                                <i class="fas fa-map-marker-alt mr-2 text-indigo-500"></i> {{ event.venue }}
+                            </span>
+                            <div class="flex items-center text-white font-bold text-xs bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                                <i class="fas fa-camera text-blue-400 mr-2"></i> {{ event.photos|length }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="glass rounded-[3rem] p-20 text-center border border-dashed border-white/10" data-aos="fade-up">
+    <div class="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-600">
+        <i class="fas fa-wind text-5xl"></i>
+    </div>
+    <h3 class="text-2xl font-black text-white mb-2">It's quiet here</h3>
+    <p class="text-gray-400 max-w-md mx-auto">No events are currently available. Check back later for new uploads!</p>
+</div>
+{% endif %}
+
+<!-- UNLOCK MODAL (Glassmorphic) -->
+<div id="unlockModal" class="fixed inset-0 z-50 hidden transition-opacity duration-300" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/95 backdrop-blur-md transition-opacity" onclick="closeUnlockModal()"></div>
+    
+    <!-- Modal Panel -->
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md p-6">
+        <div class="glass rounded-[2rem] p-10 border border-white/10 shadow-2xl relative transform transition-all scale-100 bg-slate-900/80">
+            <!-- Close Button -->
+            <button onclick="closeUnlockModal()" class="absolute top-6 right-6 text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <!-- Icon & Title -->
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-purple-400 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+                    <i class="fas fa-lock-open text-3xl"></i>
+                </div>
+                <h3 class="text-2xl font-black text-white mb-2 tracking-tight">Private Gallery</h3>
+                <p class="text-gray-400 text-sm">Enter the access code to unlock <br><span id="modalEventName" class="text-white font-bold"></span></p>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" action="{{ url_for('unlock_event') }}" class="space-y-6">
+                <!-- Code Input -->
+                <div class="relative group">
+                    <input type="text" name="access_code" required autofocus
+                           class="w-full text-center px-4 py-5 rounded-2xl bg-black/50 border border-white/10 text-white placeholder-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:bg-black/80 transition-all outline-none uppercase font-mono text-2xl tracking-[0.5em] shadow-inner"
+                           placeholder="CODE">
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg shadow-purple-600/30 hover:shadow-purple-600/50 hover:scale-[1.02] transition-all duration-300 uppercase tracking-widest text-xs">
+                    Unlock Access
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openUnlockModal(id, name) {
+        document.getElementById('modalEventName').textContent = name || "This Event";
+        const modal = document.getElementById('unlockModal');
+        modal.classList.remove('hidden');
+        // Animation effect
+        modal.firstElementChild.classList.remove('opacity-0');
+    }
+
+    function closeUnlockModal() {
+        const modal = document.getElementById('unlockModal');
+        modal.classList.add('hidden');
+    }
+    
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeUnlockModal();
+    });
+</script>
+{% endblock %}

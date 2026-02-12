@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <h1 class="text-3xl font-bold text-white">User Management</h1>
+    <a href="{{ url_for('admin_dashboard') }}"
+        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm transition">
+        <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+    </a>
+</div>
+
+<!-- Search & Controls -->
+<div class="glass p-4 rounded-2xl border border-white/5 mb-8" data-aos="fade-up">
+    <div class="relative">
+        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+        <input type="text" id="userSearch" placeholder="Search by name or email..."
+            class="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-12 pr-4 text-white focus:outline-none focus:border-indigo-500 transition">
+    </div>
+</div>
+
+<!-- Users List -->
+<div class="glass rounded-2xl border border-white/5 overflow-hidden" data-aos="fade-up">
+    <div class="p-4 md:p-6">
+        <!-- Desktop View -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-white/5">
+                    <tr class="text-gray-400 text-xs uppercase">
+                        <th class="p-4 font-bold">User</th>
+                        <th class="p-4">Role</th>
+                        <th class="p-4">Joined</th>
+                        <th class="p-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm text-gray-300 divide-y divide-white/5" id="userTableBody">
+                    {% for user in users %}
+                    <tr class="user-row hover:bg-white/5 transition" data-name="{{ user.name.lower() }}"
+                        data-email="{{ user.email.lower() }}">
+                        <td class="p-4">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                                    {{ user.name[:1].upper() }}
+                                </div>
+                                <div>
+                                    <div class="font-bold text-white">{{ user.name }}</div>
+                                    <div class="text-xs text-gray-500">{{ user.email }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <form action="{{ url_for('update_user_role', user_id=user.id) }}" method="POST"
+                                class="inline-block">
+                                <select name="role" onchange="this.form.submit()"
+                                    class="bg-black/20 text-xs border border-white/10 rounded px-2 py-1 text-gray-300 focus:outline-none focus:border-indigo-500 cursor-pointer
+                                        {% if user.role == 'admin' %}text-red-400{% elif user.role == 'organizer' %}text-blue-400{% elif user.role == 'volunteer' %}text-green-400{% endif %}"
+                                    {% if user.id==current_user.id %}disabled{% endif %}>
+                                    <option value="admin" {% if user.role=='admin' %}selected{% endif %}>Admin</option>
+                                    <option value="organizer" {% if user.role=='organizer' %}selected{% endif %}>
+                                        Organizer</option>
+                                    <option value="volunteer" {% if user.role=='volunteer' %}selected{% endif %}>
+                                        Volunteer</option>
+                                    <option value="viewer" {% if user.role=='viewer' %}selected{% endif %}>Viewer
+                                    </option>
+                                </select>
+                            </form>
+                        </td>
+                        <td class="p-4 text-gray-400">
+                            {{ user.created_at.strftime('%Y-%m-%d') }}
+                        </td>
+                        <td class="p-4 text-right">
+                            {% if user.id != current_user.id %}
+                            <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST"
+                                class="inline-block"
+                                onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');">
+                                <button type="submit" class="text-red-400 hover:text-red-300 transition"
+                                    title="Delete User">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-gray-600 text-xs italic">Current User</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="md:hidden space-y-4" id="userCards">
+            {% for user in users %}
+            <div class="user-card bg-white/5 rounded-xl p-4 border border-white/5" data-name="{{ user.name.lower() }}"
+                data-email="{{ user.email.lower() }}">
+                <div class="flex items-center gap-3 mb-4">
+                    <div
+                        class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                        {{ user.name[:1].upper() }}
+                    </div>
+                    <div>
+                        <div class="font-bold text-white">{{ user.name }}</div>
+                        <div class="text-xs text-gray-500">{{ user.email }}</div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center bg-black/20 p-2 rounded-lg">
+                        <span class="text-xs text-gray-500 uppercase font-bold">Role</span>
+                        <form action="{{ url_for('update_user_role', user_id=user.id) }}" method="POST">
+                            <select name="role" onchange="this.form.submit()"
+                                class="bg-transparent text-xs text-white focus:outline-none text-right" {% if
+                                user.id==current_user.id %}disabled{% endif %}>
+                                <option value="admin" {% if user.role=='admin' %}selected{% endif %}>Admin</option>
+                                <option value="organizer" {% if user.role=='organizer' %}selected{% endif %}>Organizer
+                                </option>
+                                <option value="volunteer" {% if user.role=='volunteer' %}selected{% endif %}>Volunteer
+                                </option>
+                                <option value="viewer" {% if user.role=='viewer' %}selected{% endif %}>Viewer</option>
+                            </select>
+                        </form>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-500">{{ user.created_at.strftime('%Y-%m-%d') }}</span>
+                        {% if user.id != current_user.id %}
+                        <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST"
+                            onsubmit="return confirm('Delete user?');">
+                            <button type="submit"
+                                class="text-red-400 hover:text-red-300 text-xs font-bold transition flex items-center gap-1">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('userSearch');
+        const rows = document.querySelectorAll('.user-row');
+        const cards = document.querySelectorAll('.user-card');
+
+        searchInput.addEventListener('input', function (e) {
+            const term = e.target.value.toLowerCase();
+
+            rows.forEach(row => {
+                const name = row.dataset.name;
+                const email = row.dataset.email;
+                if (name.includes(term) || email.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            cards.forEach(card => {
+                const name = card.dataset.name;
+                const email = card.dataset.email;
+                if (name.includes(term) || email.includes(term)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

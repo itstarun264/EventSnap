@@ -1,0 +1,1194 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ event.name }} - Gallery{% endblock %}
+
+{% block content %}
+<style>
+    .reaction-emoji {
+        position: absolute;
+        bottom: 20px;
+        font-size: 2rem;
+        pointer-events: none;
+        animation: floatUp 3s forwards ease-in;
+        z-index: 50;
+    }
+
+    @keyframes floatUp {
+        0% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+
+        100% {
+            transform: translateY(-400px) translateX(var(--random-x)) scale(1.5);
+            opacity: 0;
+        }
+    }
+
+    .audio-wave {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        height: 20px;
+    }
+
+    .audio-wave span {
+        width: 3px;
+        height: 100%;
+        background: linear-gradient(to top, #ef4444, #f97316);
+        border-radius: 3px;
+        animation: wave 0.5s ease-in-out infinite;
+    }
+
+    .audio-wave span:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .audio-wave span:nth-child(2) {
+        animation-delay: 0.1s;
+    }
+
+    .audio-wave span:nth-child(3) {
+        animation-delay: 0.2s;
+    }
+
+    .audio-wave span:nth-child(4) {
+        animation-delay: 0.3s;
+    }
+
+    .audio-wave span:nth-child(5) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes wave {
+
+        0%,
+        100% {
+            transform: scaleY(0.3);
+        }
+
+        50% {
+            transform: scaleY(1);
+        }
+    }
+
+    .volume-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        outline: none;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .volume-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+    }
+
+    /* Ensure overlay is clickable */
+    #unmuteOverlay {
+        cursor: pointer;
+    }
+
+    /* Audio debug indicator */
+    .audio-debug {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #00ff00;
+        padding: 10px;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 11px;
+        z-index: 9999;
+        max-width: 300px;
+    }
+</style>
+
+<!-- 1. LIVE BROADCAST PANEL -->
+<div id="liveStatusContainer"
+    class="{% if not event.is_live %}hidden{% endif %} mb-10 p-8 glass rounded-[2rem] border-2 border-red-600/30 bg-red-600/5 shadow-2xl"
+    data-aos="zoom-in">
+    <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+            <div class="relative">
+                <div class="w-4 h-4 bg-red-600 rounded-full animate-ping absolute"></div>
+                <div class="w-4 h-4 bg-red-600 rounded-full relative"></div>
+            </div>
+            <div>
+                <h3 class="text-2xl font-black text-white">Live Broadcast</h3>
+                <p class="text-red-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-video"></i> Video
+                    <span class="mx-1">•</span>
+                    <i class="fas fa-microphone"></i> Audio
+                </p>
+            </div>
+        </div>
+        <div class="flex gap-3">
+            <div class="px-4 py-2 rounded-full glass border border-white/10 text-white text-sm flex items-center gap-2">
+                <i class="fas fa-eye text-red-400"></i>
+                <span id="viewerCount">1</span> watching
+            </div>
+
+            <button id="watchBtn"
+                class="px-8 py-3 rounded-full bg-red-600 text-white font-bold shadow-lg shadow-red-600/30 transition hover:scale-105 hover:bg-red-500 flex items-center gap-2">
+                <i class="fas fa-play"></i> Watch Live
+            </button>
+        </div>
+    </div>
+
+    <!-- Stream Container -->
+    <div id="viewerStream" class="hidden mt-8">
+        <div id="streamContainer"
+            class="relative max-w-4xl mx-auto rounded-3xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-white/10 shadow-2xl">
+            <!-- Video/Image Display -->
+            <img id="streamDisplay" class="w-full h-full object-contain" alt="Live Stream">
+
+            <!-- Hidden Audio Element for Streaming -->
+            <audio id="streamAudio" class="hidden"></audio>
+
+            <!-- Floating Emoji Overlay -->
+            <div id="reactionOverlay" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+            <!-- Top Bar Overlay -->
+            <div class="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent z-10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="px-3 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold flex items-center gap-2 animate-pulse">
+                            <span class="w-2 h-2 bg-white rounded-full"></span>
+                            LIVE
+                        </div>
+
+                        <div id="audioStatus"
+                            class="px-3 py-1.5 rounded-full bg-green-500/20 text-green-400 text-xs font-bold hidden items-center gap-2">
+                            <div class="audio-wave">
+                                <span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                            Audio Active
+                        </div>
+
+                        <div id="audioDisabledStatus"
+                            class="px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400 text-xs font-bold flex items-center gap-2">
+                            <i class="fas fa-volume-mute"></i>
+                            Click to enable audio
+                        </div>
+                    </div>
+
+                    <div class="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur text-white text-xs font-bold">
+                        <i class="fas fa-signal mr-1"></i> HD
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Control Bar -->
+            <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <button id="audioBtn"
+                            class="w-12 h-12 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white flex items-center justify-center transition hover:bg-white/20 group">
+                            <i id="audioIcon" class="fas fa-volume-mute group-hover:scale-110 transition"></i>
+                        </button>
+
+                        <div
+                            class="flex items-center gap-3 px-4 py-2 rounded-full bg-white/10 backdrop-blur border border-white/10">
+                            <i class="fas fa-volume-down text-gray-400 text-xs"></i>
+                            <input type="range" id="volumeSlider" min="0" max="100" value="70"
+                                class="volume-slider w-24">
+                            <i class="fas fa-volume-up text-gray-400 text-xs"></i>
+                            <span id="volumePercent" class="text-white text-xs font-bold ml-1">70%</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button id="fullscreenBtn"
+                            class="w-12 h-12 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white flex items-center justify-center transition hover:bg-white/20">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="streamLoading" class="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
+                <div class="text-center">
+                    <div
+                        class="w-16 h-16 border-4 border-white/20 border-t-red-500 rounded-full animate-spin mx-auto mb-4">
+                    </div>
+                    <p class="text-white font-bold">Connecting to stream...</p>
+                    <p class="text-gray-400 text-sm mt-1">Please wait</p>
+                </div>
+            </div>
+
+            <!-- Click to Unmute Overlay -->
+            <div id="unmuteOverlay" class="absolute inset-0 bg-black/80 flex items-center justify-center z-30 hidden">
+                <div id="unmuteContent"
+                    class="text-center p-8 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 transform hover:scale-105 transition cursor-pointer">
+                    <div
+                        class="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                        <i class="fas fa-volume-up text-4xl text-white"></i>
+                    </div>
+                    <p class="text-white font-bold text-xl mb-2">🔊 Click to Enable Audio</p>
+                    <p class="text-gray-300 text-sm mb-4">Browser requires your permission to play sound</p>
+                    <button id="enableAudioBtn"
+                        class="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition">
+                        Enable Audio Now
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- REACTION BAR -->
+        <div class="flex items-center justify-center gap-6 mt-6">
+            <div id="reactionBar" class="flex gap-3 p-3 rounded-2xl bg-white/5 backdrop-blur border border-white/10">
+                <button data-emoji="❤️"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">❤️</button>
+                <button data-emoji="🔥"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">🔥</button>
+                <button data-emoji="👏"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">👏</button>
+                <button data-emoji="😮"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">😮</button>
+                <button data-emoji="🙌"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">🙌</button>
+                <button data-emoji="🎉"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">🎉</button>
+                <button data-emoji="💯"
+                    class="reaction-btn w-12 h-12 rounded-xl bg-white/5 hover:bg-white/20 flex items-center justify-center text-2xl hover:scale-125 transition-all active:scale-90 border border-transparent hover:border-white/20">💯</button>
+            </div>
+        </div>
+
+        <div class="flex justify-center mt-4">
+            <div class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs">
+                <i class="fas fa-info-circle mr-2"></i>
+                Stream quality adjusts automatically based on your connection
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- 2. EVENT HEADER SECTION -->
+<div class="relative rounded-[2.5rem] overflow-hidden mb-12 shadow-2xl border border-white/5" data-aos="fade-down">
+    {% if event.poster_filename %}
+    <div class="absolute inset-0 bg-cover bg-center blur-[100px] opacity-20 scale-110"
+        style="background-image: url('{{ url_for('static', filename='uploads/posters/' ~ event.poster_filename) }}')">
+    </div>
+    {% else %}
+    <div class="absolute inset-0 bg-gradient-to-tr from-indigo-900 via-slate-900 to-purple-900 opacity-60"></div>
+    {% endif %}
+
+    <div class="relative z-10 p-8 md:p-14 bg-slate-950/40 backdrop-blur-md">
+        <a href="{{ url_for('viewer_dashboard') }}"
+            class="inline-flex items-center text-gray-400 hover:text-white mb-8 transition group">
+            <i class="fas fa-chevron-left mr-2 group-hover:-translate-x-1 transition-transform"></i> Back to Feed
+        </a>
+
+        <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-10">
+            <div class="max-w-3xl">
+                <div class="flex items-center gap-3 mb-4">
+                    {% if event.is_live %}
+                    <span
+                        class="px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold animate-pulse flex items-center gap-2">
+                        <span class="w-2 h-2 bg-white rounded-full"></span> LIVE NOW
+                    </span>
+                    {% endif %}
+                    {% if event.status == 'completed' %}
+                    <span
+                        class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold border border-blue-500/30">
+                        <i class="fas fa-check-circle mr-1"></i> Event Completed
+                    </span>
+                    {% endif %}
+                </div>
+
+                <h1 class="text-5xl md:text-7xl font-black text-white mb-4 tracking-tighter leading-none">{{ event.name
+                    }}</h1>
+                <div class="flex flex-wrap items-center gap-4 text-gray-300">
+                    <span
+                        class="flex items-center px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest">
+                        <i class="fas fa-map-marker-alt mr-2 text-indigo-400"></i> {{ event.venue }}
+                    </span>
+                    <span
+                        class="flex items-center px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest">
+                        <i class="far fa-calendar-alt mr-2 text-indigo-400"></i> {{ event.event_date.strftime('%b %d,
+                        %Y') }}
+                    </span>
+                    <span
+                        class="flex items-center px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest">
+                        <i class="fas fa-images mr-2 text-green-400"></i> {{ photos|length }} Photos
+                    </span>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-4">
+                <a href="{{ url_for('create_event_reel', event_id=event.id) }}" id="reelBtn"
+                    class="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-orange-500 text-white font-black text-xs uppercase tracking-widest hover:opacity-90 transition shadow-xl shadow-purple-500/20 flex items-center group">
+                    <i class="fas fa-magic mr-3 group-hover:rotate-12 transition-transform"></i> AI Auto Reel
+                </a>
+
+                <a href="{{ url_for('find_my_photos', event_id=event.id) }}"
+                    class="px-8 py-4 rounded-2xl bg-white text-slate-950 font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition shadow-xl flex items-center group">
+                    <i class="fas fa-robot mr-3 text-indigo-600 group-hover:animate-bounce"></i> Find Me
+                </a>
+
+                {% if photos %}
+                <a href="{{ url_for('download_all_photos', event_id=event.id) }}"
+                    class="px-6 py-4 rounded-2xl glass text-white font-bold border border-white/10 hover:bg-white/5 transition flex items-center gap-2 group">
+                    <i class="fas fa-download group-hover:translate-y-0.5 transition-transform"></i>
+                    <span class="hidden md:inline">Download All</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- SEARCH & CHIPS -->
+        <div class="mt-14">
+            <form method="POST" action="{{ url_for('search_photos', event_id=event.id) }}"
+                class="relative max-w-2xl group" id="searchForm">
+                <div class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                    <i class="fas fa-search text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
+                </div>
+                <input type="text" name="keyword" id="searchInput" value="{{ search_keyword | default('') }}"
+                    class="w-full pl-14 pr-14 py-5 rounded-2xl bg-black/40 border border-white/10 text-white placeholder-gray-500 focus:border-indigo-500 focus:bg-black/60 transition-all outline-none text-sm font-medium"
+                    placeholder="Search visual content (e.g. 'speech', 'dance', 'smile')...">
+                <button type="submit"
+                    class="absolute right-3 top-3 bottom-3 px-6 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/20">
+                    Filter
+                </button>
+            </form>
+
+            <div class="flex flex-wrap gap-2 mt-8">
+                {% set chips = [
+                ('All', '', 'fa-border-all'),
+                ('Awards', 'awards', 'fa-trophy'),
+                ('Certificates', 'certifications', 'fa-certificate'),
+                ('Dance', 'dance', 'fa-music'),
+                ('Music', 'music', 'fa-guitar'),
+                ('Groups', 'group', 'fa-users'),
+                ('Stage', 'stage', 'fa-theater-masks'),
+                ('Selfie', 'selfie', 'fa-camera')
+                ] %}
+                {% for label, key, icon in chips %}
+                <button type="button" data-filter="{{ key }}" class="filter-chip px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border transition-all flex items-center gap-2
+                        {% if (not key and not search_keyword) or key == search_keyword %}
+                            bg-white text-black border-white shadow-lg
+                        {% else %}
+                            bg-white/5 text-gray-400 border-white/10 hover:border-white/30 hover:text-white
+                        {% endif %}">
+                    <i class="fas {{ icon }}"></i> {{ label }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3. PHOTO GRID -->
+{% if search_keyword %}
+<div class="mb-10 flex items-center justify-between" data-aos="fade-up">
+    <div class="flex items-center gap-4">
+        <span class="text-gray-500 font-bold uppercase text-[10px] tracking-[0.2em]">Results for:</span>
+        <span
+            class="px-4 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-black uppercase text-xs tracking-widest">{{
+            search_keyword }}</span>
+        <span class="text-gray-500 text-sm">({{ photos|length }} photos)</span>
+    </div>
+    <a href="{{ url_for('event_gallery', event_id=event.id) }}"
+        class="text-xs text-gray-500 hover:text-red-400 transition font-black uppercase tracking-widest flex items-center gap-2">
+        <i class="fas fa-times"></i> Clear Filter
+    </a>
+</div>
+{% endif %}
+
+{% if photos %}
+<div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6 mx-auto" id="gallery">
+    {% for photo in photos %}
+    <div class="photo-card break-inside-avoid relative group rounded-[2rem] overflow-hidden cursor-zoom-in bg-slate-900 border border-white/5 transition-all duration-500 hover:border-indigo-500/40 hover:shadow-[0_0_40px_rgba(99,102,241,0.1)]"
+        data-aos="fade-up" data-aos-delay="{{ (loop.index0 % 4) * 100 }}"
+        data-photo-url="{{ url_for('static', filename='uploads/photos/' ~ photo.filename) }}"
+        data-photo-id="{{ photo.id }}">
+
+        <img src="{{ url_for('static', filename='uploads/photos/' ~ photo.filename) }}" loading="lazy"
+            class="w-full h-auto block transition-transform duration-1000 group-hover:scale-110 opacity-90 group-hover:opacity-100">
+
+        <div
+            class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+            <div
+                class="flex justify-between items-end transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                <div class="flex gap-2 flex-wrap">
+                    {% if photo.tags %}
+                    {% for tag in (photo.tags or '').split(',')[:2] %}
+                    <span
+                        class="text-[9px] font-black uppercase tracking-tighter text-indigo-300 bg-indigo-500/20 border border-indigo-500/20 px-2 py-1 rounded-lg backdrop-blur-xl">#{{
+                        tag }}</span>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('download_photo', photo_id=photo.id) }}"
+                    class="download-btn w-11 h-11 rounded-2xl bg-white text-black flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-all shadow-2xl">
+                    <i class="fas fa-download text-xs"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="text-center mt-12">
+    <p class="text-gray-500 text-sm">Showing {{ photos|length }} photos</p>
+</div>
+{% else %}
+<div class="glass rounded-[3rem] p-24 text-center border border-dashed border-white/10" data-aos="fade-up">
+    <div
+        class="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-8 text-gray-700 border border-white/5">
+        <i class="fas fa-images text-4xl"></i>
+    </div>
+    <h3 class="text-2xl font-black text-white mb-2 uppercase tracking-widest">Gallery Empty</h3>
+    <p class="text-gray-500 max-w-sm mx-auto">This event's gallery is currently being curated. Check back soon!</p>
+
+    {% if search_keyword %}
+    <a href="{{ url_for('event_gallery', event_id=event.id) }}"
+        class="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 transition">
+        <i class="fas fa-arrow-left"></i> View All Photos
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- 4. LIGHTBOX MODAL -->
+<div id="lightbox"
+    class="fixed inset-0 z-[100] hidden bg-black/95 backdrop-blur-3xl flex flex-col justify-center items-center opacity-0 transition-all duration-500">
+    <button id="closeLightboxBtn"
+        class="absolute top-8 right-8 w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-2xl flex items-center justify-center transition shadow-2xl hover:scale-110 z-10">
+        <i class="fas fa-times"></i>
+    </button>
+
+    <button id="prevPhotoBtn"
+        class="absolute left-8 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xl flex items-center justify-center transition hover:scale-110">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <button id="nextPhotoBtn"
+        class="absolute right-8 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xl flex items-center justify-center transition hover:scale-110">
+        <i class="fas fa-chevron-right"></i>
+    </button>
+
+    <img id="lightboxImg" src=""
+        class="max-h-[80vh] max-w-[90vw] object-contain rounded-3xl shadow-[0_0_100px_rgba(0,0,0,0.8)] scale-90 transition-transform duration-500 border border-white/5">
+
+    <div class="mt-10 flex gap-4 transform translate-y-10 opacity-0 transition-all duration-700" id="lightboxActions">
+        <a id="lightboxDownload" href="#"
+            class="px-10 py-4 rounded-2xl bg-white text-black font-black text-xs uppercase tracking-[0.2em] hover:bg-gray-200 transition shadow-2xl flex items-center gap-3">
+            <i class="fas fa-download"></i> Download Original
+        </a>
+        <button id="closeLightboxBtn2"
+            class="px-10 py-4 rounded-2xl glass text-white font-black text-xs uppercase tracking-[0.2em] border border-white/10 hover:bg-white/5 transition">
+            Close
+        </button>
+    </div>
+
+    <div id="photoCounter"
+        class="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 backdrop-blur text-white text-sm font-bold">
+        1 / {{ photos|length }}
+    </div>
+</div>
+
+<!-- Audio Debug Panel (Remove in production) -->
+<div id="audioDebug" class="audio-debug hidden">
+    <div><strong>🔊 Audio Debug</strong></div>
+    <div>Enabled: <span id="debugEnabled">false</span></div>
+    <div>Muted: <span id="debugMuted">false</span></div>
+    <div>Context: <span id="debugContext">-</span></div>
+    <div>Chunks: <span id="debugChunks">0</span></div>
+    <div>Last: <span id="debugLast">-</span></div>
+</div>
+
+
+<!-- 5. SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    (function () {
+        'use strict';
+
+        // =====================================================
+        // CONFIGURATION
+        // =====================================================
+        const EVENT_ID = String("{{ event.id }}");
+        const TOTAL_PHOTOS = {{ photos| length
+    }};
+    const DEBUG_AUDIO = false; // Set to false in production
+
+    console.log('🚀 Initializing viewer for event:', EVENT_ID);
+
+    // =====================================================
+    // DOM ELEMENTS
+    // =====================================================
+    const elements = {
+        // Stream elements
+        liveStatusContainer: document.getElementById('liveStatusContainer'),
+        viewerStream: document.getElementById('viewerStream'),
+        streamContainer: document.getElementById('streamContainer'),
+        streamDisplay: document.getElementById('streamDisplay'),
+        streamLoading: document.getElementById('streamLoading'),
+        watchBtn: document.getElementById('watchBtn'),
+
+        // Audio elements
+        streamAudio: document.getElementById('streamAudio'),
+        unmuteOverlay: document.getElementById('unmuteOverlay'),
+        unmuteContent: document.getElementById('unmuteContent'),
+        enableAudioBtn: document.getElementById('enableAudioBtn'),
+        audioBtn: document.getElementById('audioBtn'),
+        audioIcon: document.getElementById('audioIcon'),
+        audioStatus: document.getElementById('audioStatus'),
+        audioDisabledStatus: document.getElementById('audioDisabledStatus'),
+        volumeSlider: document.getElementById('volumeSlider'),
+        volumePercent: document.getElementById('volumePercent'),
+        fullscreenBtn: document.getElementById('fullscreenBtn'),
+
+        // Debug
+        audioDebug: document.getElementById('audioDebug'),
+        debugEnabled: document.getElementById('debugEnabled'),
+        debugMuted: document.getElementById('debugMuted'),
+        debugContext: document.getElementById('debugContext'),
+        debugChunks: document.getElementById('debugChunks'),
+        debugLast: document.getElementById('debugLast'),
+
+        // Lightbox elements
+        lightbox: document.getElementById('lightbox'),
+        lightboxImg: document.getElementById('lightboxImg'),
+        lightboxDownload: document.getElementById('lightboxDownload'),
+        lightboxActions: document.getElementById('lightboxActions'),
+        photoCounter: document.getElementById('photoCounter'),
+        closeLightboxBtn: document.getElementById('closeLightboxBtn'),
+        closeLightboxBtn2: document.getElementById('closeLightboxBtn2'),
+        prevPhotoBtn: document.getElementById('prevPhotoBtn'),
+        nextPhotoBtn: document.getElementById('nextPhotoBtn'),
+
+        // Other
+        reactionOverlay: document.getElementById('reactionOverlay'),
+        reelBtn: document.getElementById('reelBtn'),
+        searchForm: document.getElementById('searchForm'),
+        searchInput: document.getElementById('searchInput')
+    };
+
+    // =====================================================
+    // STATE
+    // =====================================================
+    const state = {
+        // Video
+        frameBuffer: [],
+        isVideoPlaying: false,
+
+        // Audio - IMPROVED
+        audioContext: null,
+        gainNode: null,
+        isMuted: true,  // Start muted by default
+        currentVolume: 0.7,
+        audioEnabled: false,
+        audioInitialized: false,
+        overlayDismissed: false,
+        audioQueue: [],
+        isPlayingAudio: false,
+        audioChunksReceived: 0,
+
+        // Lightbox
+        currentPhotoIndex: 0,
+        photoUrls: []
+    };
+
+    // Build photo URLs array
+    document.querySelectorAll('.photo-card').forEach(card => {
+        state.photoUrls.push({
+            url: card.dataset.photoUrl,
+            id: card.dataset.photoId
+        });
+    });
+
+    // Show debug panel if enabled
+    if (DEBUG_AUDIO && elements.audioDebug) {
+        elements.audioDebug.classList.remove('hidden');
+    }
+
+    // =====================================================
+    // DEBUG HELPER
+    // =====================================================
+    function updateDebug() {
+        if (!DEBUG_AUDIO) return;
+        if (elements.debugEnabled) elements.debugEnabled.textContent = state.audioEnabled;
+        if (elements.debugMuted) elements.debugMuted.textContent = state.isMuted;
+        if (elements.debugContext) elements.debugContext.textContent = state.audioContext ? state.audioContext.state : '-';
+        if (elements.debugChunks) elements.debugChunks.textContent = state.audioChunksReceived;
+    }
+
+    function debugLog(msg) {
+        console.log(msg);
+        if (DEBUG_AUDIO && elements.debugLast) {
+            elements.debugLast.textContent = new Date().toLocaleTimeString();
+        }
+        updateDebug();
+    }
+
+    // =====================================================
+    // SOCKET CONNECTION
+    // =====================================================
+    const socket = io();
+
+    socket.on('connect', function () {
+        debugLog('✅ Connected to server');
+        socket.emit('join_event', { event_id: EVENT_ID });
+    });
+
+    socket.on('disconnect', function () {
+        debugLog('❌ Disconnected from server');
+    });
+
+    // =====================================================
+    // VIDEO STREAMING
+    // =====================================================
+    const playbackWorkerCode = `
+        let timer = null;
+        self.onmessage = function(e) {
+            if (e.data === 'start') { 
+                timer = setInterval(() => { self.postMessage('play'); }, 100); 
+            } else { 
+                clearInterval(timer); 
+            }
+        };
+    `;
+    const playbackBlob = new Blob([playbackWorkerCode], { type: 'application/javascript' });
+    const playbackWorker = new Worker(URL.createObjectURL(playbackBlob));
+
+    socket.on('stream_started', function (data) {
+        debugLog('📺 Stream started event received');
+        if (String(data.event_id) === EVENT_ID) {
+            elements.liveStatusContainer.classList.remove('hidden');
+            showNotification('🔴 Live stream started!', 'success');
+        }
+    });
+
+    socket.on('new_frame', function (data) {
+        state.frameBuffer.push(data.image);
+        if (state.frameBuffer.length > 30) state.frameBuffer.splice(0, 15);
+
+        if (!state.isVideoPlaying && state.frameBuffer.length >= 3) {
+            state.isVideoPlaying = true;
+            playbackWorker.postMessage('start');
+            elements.streamLoading.classList.add('hidden');
+            debugLog('📺 Video playback started');
+        }
+    });
+
+    playbackWorker.onmessage = function () {
+        if (state.frameBuffer.length > 0) {
+            elements.streamDisplay.src = state.frameBuffer.shift();
+        } else {
+            state.isVideoPlaying = false;
+            playbackWorker.postMessage('stop');
+        }
+    };
+
+    socket.on('stream_stopped', function (data) {
+        debugLog('📺 Stream stopped');
+        if (String(data.event_id) === EVENT_ID) {
+            playbackWorker.postMessage('stop');
+            state.isVideoPlaying = false;
+            state.frameBuffer.length = 0;
+            elements.liveStatusContainer.classList.add('hidden');
+            elements.viewerStream.classList.add('hidden');
+            showNotification('Stream ended', 'info');
+        }
+    });
+
+    // =====================================================
+    // AUDIO FUNCTIONS - WEB AUDIO API (PCM)
+    // =====================================================
+
+    // Context State
+    let audioContext = null;
+    let nextStartTime = 0;
+
+    /**
+     * Enable audio - called when user clicks to enable
+     */
+    async function enableAudio() {
+        debugLog('👆 enableAudio() called');
+
+        try {
+            state.overlayDismissed = true;
+
+            // Initialize AudioContext if not exists
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+            }
+
+            // Resume context (browser requirement)
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+
+            // Enable audio playback
+            state.audioEnabled = true;
+            state.isMuted = false;
+
+            // Hide overlay
+            hideUnmuteOverlay();
+
+            // Update UI
+            updateAudioUI();
+
+            showNotification('🔊 Audio enabled!', 'success');
+            debugLog('✅ AudioContext running');
+
+            return true;
+
+        } catch (err) {
+            console.error('❌ Error enabling audio:', err);
+            showNotification('❌ Error: ' + err.message, 'error');
+            return false;
+        }
+    }
+
+    /**
+     * Show the unmute overlay
+     */
+    function showUnmuteOverlay() {
+        if (elements.unmuteOverlay && !state.overlayDismissed) {
+            elements.unmuteOverlay.classList.remove('hidden');
+            elements.unmuteOverlay.style.display = 'flex';
+        }
+    }
+
+    /**
+     * Hide the unmute overlay
+     */
+    function hideUnmuteOverlay() {
+        if (elements.unmuteOverlay) {
+            elements.unmuteOverlay.classList.add('hidden');
+            elements.unmuteOverlay.style.display = 'none';
+        }
+    }
+
+    /**
+     * Update audio UI elements
+     */
+    function updateAudioUI() {
+        // Update icon
+        if (elements.audioIcon) {
+            if (state.isMuted || !state.audioEnabled) {
+                elements.audioIcon.className = 'fas fa-volume-mute group-hover:scale-110 transition';
+            } else {
+                elements.audioIcon.className = 'fas fa-volume-up group-hover:scale-110 transition';
+            }
+        }
+
+        // Update button style
+        if (elements.audioBtn) {
+            if (state.isMuted || !state.audioEnabled) {
+                elements.audioBtn.classList.add('bg-red-500/30');
+            } else {
+                elements.audioBtn.classList.remove('bg-red-500/30');
+            }
+        }
+
+        // Update status indicators
+        if (elements.audioStatus) {
+            if (state.audioEnabled && !state.isMuted) {
+                elements.audioStatus.classList.remove('hidden');
+                elements.audioStatus.classList.add('flex');
+            } else {
+                elements.audioStatus.classList.add('hidden');
+                elements.audioStatus.classList.remove('flex');
+            }
+        }
+
+        if (elements.audioDisabledStatus) {
+            if (!state.audioEnabled || state.isMuted) {
+                elements.audioDisabledStatus.classList.remove('hidden');
+                elements.audioDisabledStatus.classList.add('flex');
+            } else {
+                elements.audioDisabledStatus.classList.add('hidden');
+                elements.audioDisabledStatus.classList.remove('flex');
+            }
+        }
+
+        updateDebug();
+    }
+
+    /**
+     * Toggle audio mute/unmute
+     */
+    function toggleAudio() {
+        if (!state.audioEnabled) {
+            enableAudio();
+            return;
+        }
+
+        state.isMuted = !state.isMuted;
+
+        // For Web Audio API, we handle muting by not scheduling chunks or connecting to gain node
+        // But simpler: just use state.isMuted in the socket handler
+
+        updateAudioUI();
+
+        if (state.isMuted) {
+            showNotification('🔇 Audio Muted', 'info');
+        } else {
+            showNotification('🔊 Audio Unmuted', 'success');
+        }
+    }
+
+    // =====================================================
+    // AUDIO SOCKET HANDLER - PCM
+    // =====================================================
+    socket.on('new_audio_pcm', async function (data) {
+        state.audioChunksReceived++;
+        updateDebug();
+
+        if (!data.audio || !state.audioEnabled || state.isMuted || !audioContext) {
+            // If not enabled, we just drop the chunks. 
+            // With PCM we don't need to buffer "headers", so dropping is fine.
+            return;
+        }
+
+        try {
+            const int16Data = new Int16Array(data.audio);
+            const float32Data = new Float32Array(int16Data.length);
+
+            // Convert Int16 -> Float32
+            for (let i = 0; i < int16Data.length; i++) {
+                float32Data[i] = int16Data[i] / 32768.0;
+            }
+
+            const buffer = audioContext.createBuffer(1, float32Data.length, data.sampleRate || 44100);
+            buffer.getChannelData(0).set(float32Data);
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+
+            // Scheduling logic
+            if (nextStartTime < audioContext.currentTime) {
+                nextStartTime = audioContext.currentTime + 0.05; // 50ms buffer
+            }
+
+            source.start(nextStartTime);
+            nextStartTime += buffer.duration;
+
+        } catch (e) {
+            console.error('Error processing audio chunk:', e);
+        }
+    });
+
+    // =====================================================
+    // UI CONTROLS
+    // =====================================================
+
+    /**
+     * Toggle watch stream
+     */
+    function toggleWatch() {
+        const isHidden = elements.viewerStream.classList.contains('hidden');
+        elements.viewerStream.classList.toggle('hidden');
+
+        if (isHidden) {
+            // Starting to watch
+            elements.watchBtn.innerHTML = '<i class="fas fa-eye-slash mr-2"></i> Stop Watching';
+            elements.watchBtn.classList.remove('bg-red-600');
+            elements.watchBtn.classList.add('bg-gray-600');
+
+            debugLog('👀 Started watching');
+
+            // AUTO-PLAY: Enable audio immediately since this is a user interaction
+            if (!state.audioEnabled) {
+                enableAudio().then(success => {
+                    if (success) {
+                        debugLog('✅ Audio auto-enabled on watch');
+                    } else {
+                        // If it fails (rare on click), show overlay
+                        showUnmuteOverlay();
+                    }
+                });
+            }
+
+        } else {
+            // Stopping watch
+            elements.watchBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Watch Live';
+            elements.watchBtn.classList.add('bg-red-600');
+            elements.watchBtn.classList.remove('bg-gray-600');
+
+            debugLog('👀 Stopped watching');
+        }
+    }
+
+    /**
+     * Toggle fullscreen
+     */
+    function toggleFullscreen() {
+        const container = elements.streamContainer;
+        if (!container) return;
+
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => {
+                console.log('Fullscreen error:', err);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // =====================================================
+    // REACTIONS
+    // =====================================================
+    function sendReaction(emoji) {
+        socket.emit('send_reaction', { event_id: EVENT_ID, emoji: emoji });
+        spawnEmoji(emoji);
+    }
+
+    socket.on('new_reaction', function (data) {
+        spawnEmoji(data.emoji);
+    });
+
+    function spawnEmoji(emoji) {
+        if (!elements.reactionOverlay) return;
+
+        const el = document.createElement('div');
+        el.className = 'reaction-emoji';
+        el.textContent = emoji;
+        el.style.left = Math.random() * 80 + 10 + '%';
+        el.style.setProperty('--random-x', (Math.random() * 100 - 50) + 'px');
+        elements.reactionOverlay.appendChild(el);
+
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    // =====================================================
+    // LIGHTBOX
+    // =====================================================
+    function openLightbox(url, id) {
+        state.currentPhotoIndex = state.photoUrls.findIndex(p => p.id === id);
+        showLightboxPhoto();
+    }
+
+    function showLightboxPhoto() {
+        if (state.currentPhotoIndex < 0 || state.currentPhotoIndex >= state.photoUrls.length) return;
+
+        const photo = state.photoUrls[state.currentPhotoIndex];
+        elements.lightboxDownload.href = `/viewer/photo/${photo.id}/download`;
+        elements.photoCounter.textContent = `${state.currentPhotoIndex + 1} / ${state.photoUrls.length}`;
+        elements.lightboxImg.src = photo.url;
+        elements.lightbox.classList.remove('hidden');
+
+        setTimeout(() => {
+            elements.lightbox.classList.remove('opacity-0');
+            elements.lightboxImg.classList.remove('scale-90');
+            elements.lightboxImg.classList.add('scale-100');
+            elements.lightboxActions.classList.remove('opacity-0', 'translate-y-10');
+        }, 50);
+
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        elements.lightbox.classList.add('opacity-0');
+        elements.lightboxImg.classList.add('scale-90');
+        elements.lightboxImg.classList.remove('scale-100');
+
+        setTimeout(() => elements.lightbox.classList.add('hidden'), 500);
+        document.body.style.overflow = 'auto';
+    }
+
+    function nextPhoto() {
+        state.currentPhotoIndex = (state.currentPhotoIndex + 1) % state.photoUrls.length;
+        showLightboxPhoto();
+    }
+
+    function prevPhoto() {
+        state.currentPhotoIndex = (state.currentPhotoIndex - 1 + state.photoUrls.length) % state.photoUrls.length;
+        showLightboxPhoto();
+    }
+
+    // =====================================================
+    // UTILITY FUNCTIONS
+    // =====================================================
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-[200] px-6 py-3 rounded-xl text-white font-bold shadow-2xl transform translate-x-full transition-transform duration-300`;
+
+        if (type === 'success') notification.classList.add('bg-green-600');
+        else if (type === 'error') notification.classList.add('bg-red-600');
+        else notification.classList.add('bg-indigo-600');
+
+        notification.innerHTML = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => notification.classList.remove('translate-x-full'), 100);
+        setTimeout(() => {
+            notification.classList.add('translate-x-full');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    function applyFilter(keyword) {
+        elements.searchInput.value = keyword;
+        elements.searchForm.submit();
+    }
+
+    // =====================================================
+    // EVENT LISTENERS
+    // =====================================================
+
+    // Watch button
+    if (elements.watchBtn) {
+        elements.watchBtn.addEventListener('click', toggleWatch);
+    }
+
+    // Unmute overlay - click anywhere on overlay
+    if (elements.unmuteOverlay) {
+        elements.unmuteOverlay.addEventListener('click', function (e) {
+            debugLog('👆 Overlay clicked');
+            enableAudio();
+        });
+    }
+
+    // Unmute content area - also enable audio
+    if (elements.unmuteContent) {
+        elements.unmuteContent.addEventListener('click', function (e) {
+            e.stopPropagation();
+            debugLog('👆 Content area clicked');
+            enableAudio();
+        });
+    }
+
+    // Enable audio button
+    if (elements.enableAudioBtn) {
+        elements.enableAudioBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            debugLog('👆 Enable button clicked');
+            enableAudio();
+        });
+    }
+
+    // Audio toggle button
+    if (elements.audioBtn) {
+        elements.audioBtn.addEventListener('click', function () {
+            toggleAudio();
+        });
+    }
+
+    // Volume slider
+    if (elements.volumeSlider) {
+        elements.volumeSlider.addEventListener('input', function () {
+            setVolume(parseInt(this.value));
+        });
+    }
+
+    // Fullscreen button
+    if (elements.fullscreenBtn) {
+        elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+    }
+
+    // Audio disabled status - click to enable
+    if (elements.audioDisabledStatus) {
+        elements.audioDisabledStatus.addEventListener('click', function () {
+            if (!state.audioEnabled) {
+                showUnmuteOverlay();
+            } else {
+                toggleAudio();
+            }
+        });
+        elements.audioDisabledStatus.style.cursor = 'pointer';
+    }
+
+    // Reaction buttons
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            sendReaction(this.dataset.emoji);
+        });
+    });
+
+    // Photo cards (lightbox)
+    document.querySelectorAll('.photo-card').forEach(card => {
+        card.addEventListener('click', function (e) {
+            if (e.target.closest('.download-btn')) return;
+            openLightbox(this.dataset.photoUrl, this.dataset.photoId);
+        });
+    });
+
+    // Download buttons - stop propagation
+    document.querySelectorAll('.download-btn').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+    });
+
+    // Lightbox controls
+    if (elements.closeLightboxBtn) {
+        elements.closeLightboxBtn.addEventListener('click', closeLightbox);
+    }
+    if (elements.closeLightboxBtn2) {
+        elements.closeLightboxBtn2.addEventListener('click', closeLightbox);
+    }
+    if (elements.prevPhotoBtn) {
+        elements.prevPhotoBtn.addEventListener('click', prevPhoto);
+    }
+    if (elements.nextPhotoBtn) {
+        elements.nextPhotoBtn.addEventListener('click', nextPhoto);
+    }
+
+    // Filter chips
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.addEventListener('click', function () {
+            applyFilter(this.dataset.filter);
+        });
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowRight') nextPhoto();
+        if (e.key === 'ArrowLeft') prevPhoto();
+        // M key to toggle mute
+        if (e.key === 'm' || e.key === 'M') toggleAudio();
+    });
+
+    // Reel button loading
+    if (elements.reelBtn) {
+        elements.reelBtn.addEventListener('click', function () {
+            this.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-3"></i> Generating...';
+            this.classList.add('opacity-50', 'pointer-events-none');
+        });
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function () {
+        socket.emit('leave_event', { event_id: EVENT_ID });
+        if (state.audioContext) {
+            state.audioContext.close();
+        }
+    });
+
+    // Initial UI update
+    updateAudioUI();
+
+    debugLog('✅ Viewer page fully initialized');
+    
+}) ();
+</script>
+{% endblock %}

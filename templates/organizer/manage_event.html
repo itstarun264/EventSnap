@@ -1,0 +1,1028 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage {{ event.name }}{% endblock %}
+
+{% block content %}
+
+<!-- Back Button -->
+<a href="{{ url_for('organizer_dashboard') }}"
+    class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition group">
+    <i class="fas fa-arrow-left mr-2 group-hover:-translate-x-1 transition-transform"></i> Back to Dashboard
+</a>
+
+<!-- Header Area -->
+<div class="glass rounded-3xl p-8 mb-8 border border-white/10" data-aos="fade-down">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <!-- Event Info -->
+        <div class="flex-1">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                    {% if event.status == 'approved' %}bg-green-500/20 text-green-400 border border-green-500/30
+                    {% elif event.status == 'pending' %}bg-yellow-500/20 text-yellow-400 border border-yellow-500/30
+                    {% elif event.status == 'completed' %}bg-blue-500/20 text-blue-400 border border-blue-500/30
+                    {% else %}bg-red-500/20 text-red-400 border border-red-500/30{% endif %}">
+                    <i
+                        class="fas {% if event.status == 'approved' %}fa-check-circle{% elif event.status == 'pending' %}fa-clock{% elif event.status == 'completed' %}fa-flag-checkered{% else %}fa-times-circle{% endif %} mr-1"></i>
+                    {{ event.status }}
+                </span>
+
+                {% if event.is_live %}
+                <span
+                    class="px-4 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold animate-pulse flex items-center gap-2">
+                    <span class="w-2 h-2 bg-white rounded-full"></span> LIVE NOW
+                </span>
+                {% endif %}
+            </div>
+
+            <h1 class="text-4xl md:text-5xl font-black text-white mb-3 tracking-tight">{{ event.name }}</h1>
+
+            <div class="flex flex-wrap items-center gap-4 text-sm">
+                <span class="flex items-center gap-2 text-gray-400">
+                    <i class="fas fa-map-marker-alt text-indigo-400"></i>
+                    {{ event.venue }}
+                </span>
+                <span class="flex items-center gap-2 text-gray-400">
+                    <i class="far fa-calendar text-indigo-400"></i>
+                    {{ event.event_date.strftime('%B %d, %Y at %I:%M %p') }}
+                </span>
+                <span class="flex items-center gap-2 text-gray-400">
+                    <i class="fas fa-clock text-purple-400"></i>
+                    Created {{ event.created_at.strftime('%b %d, %Y') if event.created_at else 'Recently' }}
+                </span>
+            </div>
+
+            {% if event.description %}
+            <p class="text-gray-400 mt-4 max-w-2xl">{{ event.description }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex flex-col gap-3">
+            <button onclick="openEditModal()"
+                class="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold transition flex items-center gap-3 group">
+                <i class="fas fa-pen text-indigo-400 group-hover:rotate-12 transition-transform"></i>
+                Edit Details
+            </button>
+
+            <a href="{{ url_for('event_gallery', event_id=event.id) }}" target="_blank"
+                class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition flex items-center gap-3 shadow-lg shadow-indigo-600/20">
+                <i class="fas fa-external-link-alt"></i>
+                View Gallery
+            </a>
+
+            <form action="{{ url_for('organizer_delete_event', event_id=event.id) }}" method="POST"
+                onsubmit="return confirm('⚠️ Are you sure you want to delete this event? This cannot be undone.');">
+                <button type="submit"
+                    class="w-full px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 font-bold transition flex items-center justify-center gap-3 group">
+                    <i class="fas fa-trash-alt group-hover:shake"></i>
+                    Delete Event
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Dashboard -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" data-aos="fade-up">
+    <!-- Photos Count -->
+    <div class="glass rounded-2xl p-6 border border-white/10 hover:border-green-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-2">
+            <div
+                class="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-images text-2xl text-green-400"></i>
+            </div>
+            <span class="text-3xl font-black text-white">{{ photos|length }}</span>
+        </div>
+        <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Total Photos</p>
+    </div>
+
+    <!-- Volunteers Count -->
+    <div class="glass rounded-2xl p-6 border border-white/10 hover:border-blue-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-2">
+            <div
+                class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-users text-2xl text-blue-400"></i>
+            </div>
+            <span class="text-3xl font-black text-white">{{ volunteers|length }}</span>
+        </div>
+        <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Volunteers</p>
+    </div>
+
+    <!-- Event Type -->
+    <div class="glass rounded-2xl p-6 border border-white/10 hover:border-purple-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-2">
+            <div
+                class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i
+                    class="fas {% if event.event_type == 'private' %}fa-lock{% else %}fa-globe{% endif %} text-2xl text-purple-400"></i>
+            </div>
+            <span class="text-lg font-black text-white uppercase">{{ event.event_type }}</span>
+        </div>
+        <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Event Type</p>
+    </div>
+
+    <!-- Access Code (if private) -->
+    <div class="glass rounded-2xl p-6 border border-white/10 hover:border-yellow-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-2">
+            <div
+                class="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-key text-2xl text-yellow-400"></i>
+            </div>
+            {% if event.access_code %}
+            <button onclick="copyAccessCode()" class="text-xl font-black text-white hover:text-yellow-400 transition"
+                title="Click to copy">
+                {{ event.access_code }}
+            </button>
+            {% else %}
+            <span class="text-gray-500 text-sm">Public</span>
+            {% endif %}
+        </div>
+        <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Access Code</p>
+    </div>
+</div>
+
+<!-- LIVE STREAM SECTION -->
+<div class="glass rounded-3xl p-8 mb-8 border-2 {% if event.is_live %}border-red-500/40 bg-red-500/5{% else %}border-white/10{% endif %} transition-all"
+    data-aos="zoom-in">
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-6">
+        <div>
+            <h3 class="text-2xl font-black text-white mb-2 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                    <i class="fas fa-broadcast-tower text-red-500"></i>
+                </div>
+                Live Broadcast Control
+            </h3>
+            <p class="text-gray-400 text-sm">Stream video and audio to all viewers in real-time</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Stream Status -->
+            <div id="streamStatus"
+                class="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-gray-400 text-sm font-bold hidden">
+                <i class="fas fa-circle text-gray-500 mr-2"></i>
+                <span>Ready</span>
+            </div>
+
+            <!-- Start/Stop Button -->
+            <button id="liveBtn" onclick="toggleLiveStream()"
+                class="px-8 py-3.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all flex items-center gap-3 shadow-xl shadow-red-600/30 hover:scale-105">
+                <i class="fas fa-video"></i>
+                <span>Start Stream</span>
+            </button>
+
+            <!-- Screen Share Button -->
+            <button id="screenShareBtn" onclick="toggleScreenShare()" disabled
+                class="px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-all flex items-center gap-3 shadow-xl shadow-indigo-600/30">
+                <i class="fas fa-desktop"></i>
+                <span id="screenShareText">Share Screen</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Video Preview Area -->
+    <div id="organizerVideoArea" class="hidden">
+        <div class="relative rounded-2xl overflow-hidden border-2 border-red-600 bg-black aspect-video shadow-2xl">
+            <video id="livePreview" autoplay playsinline muted class="w-full h-full object-cover"></video>
+
+            <!-- Live Badge -->
+            <div
+                class="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 rounded-full bg-red-600 text-white text-xs font-black animate-pulse shadow-lg">
+                <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping absolute"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-white relative"></span>
+                <span class="ml-2">LIVE BROADCASTING</span>
+            </div>
+
+            <!-- Stream Info Overlay -->
+            <div
+                class="absolute top-4 right-4 px-4 py-2 rounded-full bg-black/60 backdrop-blur text-white text-xs font-bold flex items-center gap-2">
+                <i class="fas fa-eye"></i>
+                <span id="viewerCount">0</span> viewers
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                <!-- Audio Indicator -->
+                <div id="audioIndicator"
+                    class="px-3 py-2 rounded-full bg-black/60 backdrop-blur text-white text-xs font-bold flex items-center gap-2">
+                    <i class="fas fa-microphone text-green-400"></i>
+                    <span>Audio Active</span>
+                </div>
+
+                <!-- Quality Indicator -->
+                <div class="px-3 py-2 rounded-full bg-black/60 backdrop-blur text-white text-xs font-bold">
+                    <i class="fas fa-signal mr-2"></i>HD Quality
+                </div>
+            </div>
+        </div>
+
+        <!-- Stop Button -->
+        <button onclick="stopStreaming()"
+            class="w-full mt-4 py-4 rounded-xl bg-white hover:bg-gray-100 text-black font-bold transition-all shadow-xl flex items-center justify-center gap-3 group">
+            <i class="fas fa-stop-circle text-red-600 group-hover:animate-pulse"></i>
+            End Live Stream
+        </button>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid lg:grid-cols-3 gap-8">
+    <!-- Left Column: Photo Management -->
+    <div class="lg:col-span-2 space-y-8">
+        <!-- Upload Section -->
+        <div class="glass rounded-3xl p-8 border border-white/10" data-aos="fade-right">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-black text-white flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                        <i class="fas fa-cloud-upload-alt text-indigo-400"></i>
+                    </div>
+                    Upload Photos
+                </h2>
+
+                {% if photos %}
+                <span class="text-sm text-gray-400">
+                    Storage: <span class="text-white font-bold">{{ photos|length }}</span> files
+                </span>
+                {% endif %}
+            </div>
+
+            {% if event.status == 'approved' %}
+            <form method="POST" action="{{ url_for('organizer_upload_photos', event_id=event.id) }}"
+                enctype="multipart/form-data" id="uploadForm">
+                <div
+                    class="border-2 border-dashed border-white/10 rounded-2xl p-12 text-center hover:border-indigo-500/50 hover:bg-white/5 transition-all duration-300 group cursor-pointer">
+                    <div class="mb-6">
+                        <div
+                            class="w-20 h-20 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-images text-4xl text-indigo-400"></i>
+                        </div>
+                        <h3 class="text-white font-bold text-lg mb-2">Drag & Drop Files Here</h3>
+                        <p class="text-gray-400 text-sm">or click to browse your device</p>
+                    </div>
+
+                    <input type="file" name="photos" multiple accept="image/*" required id="fileInput" class="block w-full text-sm text-gray-400 
+                                      file:mr-4 file:py-3 file:px-6 
+                                      file:rounded-xl file:border-0 
+                                      file:text-sm file:font-bold 
+                                      file:bg-indigo-600 file:text-white 
+                                      hover:file:bg-indigo-700 
+                                      file:transition file:cursor-pointer
+                                      cursor-pointer">
+
+                    <button type="submit"
+                        class="mt-6 px-10 py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold hover:opacity-90 transition-all shadow-xl shadow-indigo-600/30 hover:scale-105">
+                        <i class="fas fa-upload mr-2"></i>
+                        Start Upload
+                    </button>
+
+                    <!-- Upload Progress -->
+                    <div id="uploadProgress" class="hidden mt-6">
+                        <div class="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                            <div class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-300"
+                                style="width: 0%" id="progressBar"></div>
+                        </div>
+                        <p class="text-gray-400 text-xs mt-2">Uploading... <span id="progressText">0%</span></p>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Supported Formats -->
+            <div class="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <i class="fas fa-info-circle"></i>
+                <span>Supported: JPG, PNG, WEBP • Max 10MB per file</span>
+            </div>
+            {% else %}
+            <div class="p-8 rounded-2xl bg-yellow-500/10 border-2 border-yellow-500/20 text-center">
+                <i class="fas fa-clock text-4xl text-yellow-400 mb-4"></i>
+                <h3 class="text-yellow-200 font-bold text-lg mb-2">Pending Admin Approval</h3>
+                <p class="text-yellow-300/70 text-sm">Photo uploads will be enabled once your event is approved by an
+                    administrator.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Photo Gallery Section -->
+        <div class="glass rounded-3xl p-8 border border-white/10" data-aos="fade-right" data-aos-delay="100">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <h2 class="text-2xl font-black text-white flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                        <i class="fas fa-images text-green-400"></i>
+                    </div>
+                    Gallery
+                    <span class="px-3 py-1 rounded-full bg-white/5 text-sm font-bold text-gray-400">
+                        {{ photos|length }} items
+                    </span>
+                </h2>
+
+                <!-- Actions -->
+                {% if event.status == 'approved' and photos %}
+                <div class="flex items-center gap-3">
+                    <button onclick="selectAll()"
+                        class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-sm font-bold transition border border-white/10">
+                        <i class="fas fa-check-double mr-2"></i> Select All
+                    </button>
+
+                    <form method="POST" action="{{ url_for('organizer_clear_all_photos', event_id=event.id) }}"
+                        onsubmit="return confirm('⚠️ DANGER: This will permanently delete ALL {{ photos|length }} photos. This cannot be undone. Continue?');">
+                        <button type="submit"
+                            class="px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-600 hover:text-white text-red-400 border border-red-500/20 font-bold text-sm transition-all flex items-center gap-2">
+                            <i class="fas fa-trash-alt"></i>
+                            Clear All
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if photos %}
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {% for photo in photos %}
+                <div
+                    class="aspect-square rounded-2xl overflow-hidden relative group border border-white/5 bg-slate-900 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                    <img src="{{ url_for('static', filename='uploads/photos/' ~ photo.filename) }}" loading="lazy"
+                        class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110">
+
+                    <!-- Overlay -->
+                    <div
+                        class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                        <!-- Tags -->
+                        {% if photo.tags %}
+                        <div class="mb-2 flex flex-wrap gap-1">
+                            {% for tag in (photo.tags or '').split(',')[:2] %}
+                            <span
+                                class="text-[8px] font-bold uppercase px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-500/30">
+                                #{{ tag }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center justify-between gap-2">
+                            <a href="{{ url_for('static', filename='uploads/photos/' ~ photo.filename) }}" download
+                                class="flex-1 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center text-white hover:bg-indigo-600 transition">
+                                <i class="fas fa-download text-sm"></i>
+                            </a>
+
+                            <form method="POST" action="{{ url_for('delete_photo', photo_id=photo.id) }}"
+                                onsubmit="return confirm('Delete this photo?');" class="flex-1">
+                                <button type="submit"
+                                    class="w-full h-10 rounded-xl bg-red-500/20 backdrop-blur flex items-center justify-center text-red-400 hover:bg-red-600 hover:text-white transition border border-red-500/30">
+                                    <i class="fas fa-trash-alt text-sm"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Upload Time -->
+                    <div
+                        class="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition">
+                        {{ photo.uploaded_at.strftime('%H:%M') if photo.uploaded_at else 'Recent' }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-20 border-2 border-dashed border-white/5 rounded-2xl">
+                <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-images text-4xl text-gray-700"></i>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">Gallery Empty</h3>
+                <p class="text-gray-500 text-sm max-w-md mx-auto">Your event gallery is waiting for photos. Upload
+                    images above to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Team & Info -->
+    <div class="space-y-8">
+        <!-- Volunteers Section -->
+        <div class="glass rounded-3xl p-8 border border-white/10" data-aos="fade-left">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black text-white flex items-center gap-2">
+                    <i class="fas fa-users text-purple-400"></i>
+                    Team
+                </h2>
+                <a href="{{ url_for('add_volunteer', event_id=event.id) }}"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-purple-600 border border-white/10 hover:border-purple-500 text-white transition flex items-center justify-center group">
+                    <i class="fas fa-user-plus group-hover:scale-110 transition-transform"></i>
+                </a>
+            </div>
+
+            {% if volunteers %}
+            <div class="space-y-3">
+                {% for v in volunteers %}
+                <div
+                    class="p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                            {{ v.volunteer.name[:1].upper() }}
+                        </div>
+                        <div>
+                            <p class="text-white font-bold text-sm">{{ v.volunteer.name }}</p>
+                            <p class="text-xs text-gray-500">{{ v.volunteer.email }}</p>
+                            <p class="text-[10px] text-gray-600 mt-1">Added {{ v.assigned_at.strftime('%b %d') if
+                                v.assigned_at else 'Recently' }}</p>
+                        </div>
+                    </div>
+                    <form method="POST"
+                        action="{{ url_for('remove_volunteer', event_id=event.id, assignment_id=v.id) }}"
+                        onsubmit="return confirm('Remove {{ v.volunteer.name }} from this event?');">
+                        <button
+                            class="w-9 h-9 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-600 hover:text-white transition border border-red-500/20 flex items-center justify-center">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-users text-gray-600 text-2xl"></i>
+                </div>
+                <p class="text-gray-500 text-sm mb-4">No team members yet</p>
+                <a href="{{ url_for('add_volunteer', event_id=event.id) }}"
+                    class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition shadow-lg shadow-purple-600/20">
+                    <i class="fas fa-user-plus"></i>
+                    Add Volunteer
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Event Info Card -->
+        <div class="glass rounded-3xl p-8 border border-white/10" data-aos="fade-left" data-aos-delay="100">
+            <h3 class="text-lg font-black text-white mb-6 flex items-center gap-2">
+                <i class="fas fa-info-circle text-blue-400"></i>
+                Event Information
+            </h3>
+
+            <div class="space-y-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-tag text-blue-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase font-bold tracking-wider">Type</p>
+                        <p class="text-white font-bold capitalize">{{ event.event_type }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-calendar-plus text-green-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs uppercase font-bold tracking-wider">Created</p>
+                        <p class="text-white font-bold">{{ event.created_at.strftime('%B %d, %Y') if event.created_at
+                            else 'Recently' }}</p>
+                    </div>
+                </div>
+
+                {% if event.access_code %}
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-key text-yellow-400 text-sm"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-gray-500 text-xs uppercase font-bold tracking-wider mb-1">Access Code</p>
+                        <div class="flex items-center gap-2">
+                            <code
+                                class="text-white font-mono font-bold text-lg bg-white/5 px-3 py-1 rounded-lg border border-white/10">
+                                {{ event.access_code }}
+                            </code>
+                            <button onclick="copyAccessCode()"
+                                class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition flex items-center justify-center">
+                                <i class="fas fa-copy text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Tips -->
+        <div class="glass rounded-3xl p-6 border border-indigo-500/20 bg-indigo-500/5" data-aos="fade-left"
+            data-aos-delay="200">
+            <h3 class="text-sm font-black text-indigo-400 mb-4 flex items-center gap-2">
+                <i class="fas fa-lightbulb"></i>
+                Pro Tips
+            </h3>
+            <ul class="space-y-3 text-sm text-gray-400">
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                    <span>Upload high-quality photos for better AI tagging</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                    <span>Use live streaming to engage viewers in real-time</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                    <span>Add volunteers to help capture more moments</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT EVENT MODAL -->
+<div id="editEventModal" class="fixed inset-0 z-50 hidden" aria-labelledby="modal-title" role="dialog"
+    aria-modal="true">
+    <div class="absolute inset-0 bg-black/90 backdrop-blur-sm transition-opacity" onclick="closeEditModal()"></div>
+
+    <div class="relative min-h-screen flex items-center justify-center p-4">
+        <div class="relative bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full p-8 shadow-2xl transform transition-all"
+            data-aos="zoom-in">
+
+            <div class="flex justify-between items-center mb-8">
+                <h3 class="text-3xl font-black text-white">Edit Event</h3>
+                <button onclick="closeEditModal()"
+                    class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition flex items-center justify-center">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <form action="{{ url_for('organizer_update_event', event_id=event.id) }}" method="POST" class="space-y-6">
+
+                <!-- Event Name -->
+                <div>
+                    <label class="block text-gray-400 text-sm font-bold mb-3">Event Name</label>
+                    <input type="text" name="name" value="{{ event.name }}" required
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white text-lg focus:outline-none focus:border-indigo-500 transition placeholder-gray-600"
+                        placeholder="Enter event name">
+                </div>
+
+                <!-- Venue -->
+                <div>
+                    <label class="block text-gray-400 text-sm font-bold mb-3">Venue / Location</label>
+                    <div class="relative">
+                        <i class="fas fa-map-marker-alt absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                        <input type="text" name="venue" value="{{ event.venue }}" required
+                            class="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-5 py-4 text-white focus:outline-none focus:border-indigo-500 transition placeholder-gray-600"
+                            placeholder="Event location">
+                    </div>
+                </div>
+
+                <!-- Date -->
+                <div>
+                    <label class="block text-gray-400 text-sm font-bold mb-3">Event Date</label>
+                    <div class="relative">
+                        <i class="far fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                        <input type="date" name="event_date" value="{{ event.event_date.strftime('%Y-%m-%d') }}"
+                            required
+                            class="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-5 py-4 text-white focus:outline-none focus:border-indigo-500 transition [color-scheme:dark]">
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-gray-400 text-sm font-bold mb-3">Description</label>
+                    <textarea name="description" rows="4"
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:border-indigo-500 transition resize-none placeholder-gray-600"
+                        placeholder="Tell us about your event...">{{ event.description }}</textarea>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-4 flex gap-4">
+                    <button type="button" onclick="closeEditModal()"
+                        class="flex-1 py-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition border border-white/10">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="flex-1 py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white font-bold transition shadow-xl shadow-indigo-600/30">
+                        <i class="fas fa-save mr-2"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<!-- SCRIPTS -->
+<!-- SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    // ========================================
+    // MODAL LOGIC
+    // ========================================
+    function openEditModal() {
+        document.getElementById('editEventModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editEventModal').classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+
+    // ========================================
+    // UTILITY FUNCTIONS
+    // ========================================
+    function copyAccessCode() {
+        const code = "{{ event.access_code }}";
+        navigator.clipboard.writeText(code).then(() => {
+            showNotification('Access code copied!', 'success');
+        });
+    }
+
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-[200] px-6 py-3 rounded-xl text-white font-bold shadow-2xl transform translate-x-full transition-transform duration-300`;
+
+        if (type === 'success') {
+            notification.classList.add('bg-green-600');
+            notification.innerHTML = `<i class="fas fa-check-circle mr-2"></i> ${message}`;
+        } else if (type === 'error') {
+            notification.classList.add('bg-red-600');
+            notification.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> ${message}`;
+        } else {
+            notification.classList.add('bg-indigo-600');
+            notification.innerHTML = `<i class="fas fa-info-circle mr-2"></i> ${message}`;
+        }
+
+        document.body.appendChild(notification);
+        setTimeout(() => notification.classList.remove('translate-x-full'), 100);
+        setTimeout(() => {
+            notification.classList.add('translate-x-full');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // ========================================
+    // LIVE STREAMING LOGIC - FIXED
+    // ========================================
+    const socket = io();
+    const event_id = String("{{ event.id }}");
+    let activeLocalStream = null;
+    let videoTrack = null;
+    let audioTrack = null;
+    let timerWorker = null;
+    let audioMediaRecorder = null;
+    let isStreaming = false;
+    let framesSent = 0;
+    let audioChunksSent = 0;
+
+    console.log('🎬 ORGANIZER: Page loaded for event:', event_id);
+
+    // Worker for frame timing
+    const workerCode = ` 
+        let timer = null; 
+        self.onmessage = function(e) { 
+            if (e.data === 'start') { 
+                timer = setInterval(() => { self.postMessage('tick'); }, 100); 
+            } else { 
+                clearInterval(timer); 
+            } 
+        }; 
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    timerWorker = new Worker(URL.createObjectURL(blob));
+
+    async function toggleLiveStream() {
+        if (isStreaming) {
+            stopStreaming();
+            return;
+        }
+
+        try {
+            console.log('📹 ORGANIZER: Requesting media access...');
+
+            // Request media with BOTH video and audio
+            const constraints = {
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    frameRate: { ideal: 15 }
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 44100,
+                    channelCount: 1
+                }
+            };
+
+            activeLocalStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+            console.log('✅ ORGANIZER: Media access granted');
+
+            // Check if we actually got audio
+            const audioTracks = activeLocalStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                throw new Error('No audio track available. Check microphone permissions.');
+            }
+
+            const videoElement = document.getElementById('livePreview');
+            videoElement.srcObject = activeLocalStream;
+
+            // Update UI
+            document.getElementById('organizerVideoArea').classList.remove('hidden');
+            const liveBtn = document.getElementById('liveBtn');
+            liveBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Stream';
+            liveBtn.classList.add('animate-pulse', 'bg-gray-600');
+            liveBtn.classList.remove('bg-red-600');
+
+            // Enable Screen Share
+            const screenShareBtn = document.getElementById('screenShareBtn');
+            if (screenShareBtn) {
+                screenShareBtn.disabled = false;
+                screenShareBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            isStreaming = true;
+            framesSent = 0;
+            audioChunksSent = 0;
+
+            // Emit start event
+            socket.emit('start_stream', { event_id: event_id });
+            showNotification('🔴 Live stream started!', 'success');
+
+            // ====== AUDIO STREAMING ======
+            startAudioStreaming();
+
+            // ====== VIDEO STREAMING ======
+            startVideoStreaming(videoElement);
+
+        } catch (err) {
+            console.error('🔴 ORGANIZER: Stream error:', err);
+            showNotification("Error: " + err.message, 'error');
+            stopStreaming();
+        }
+    }
+
+    // Global variable for screen stream
+    let screenStream = null;
+    let screenAudioInput = null; // New global for screen audio mix
+
+    async function toggleScreenShare() {
+        const btn = document.getElementById('screenShareBtn');
+        const btnText = document.getElementById('screenShareText');
+        const videoElement = document.getElementById('livePreview');
+
+        // If already sharing screen, stop it
+        if (screenStream) {
+            stopScreenShare();
+            return;
+        }
+
+        try {
+            console.log('🖥️ ORGANIZER: Requesting screen share...');
+
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    cursor: "always"
+                },
+                audio: true // Capture system audio if possible
+            });
+
+            const screenVideoTrack = screenStream.getVideoTracks()[0];
+            const screenAudioTrack = screenStream.getAudioTracks()[0];
+
+            // Handle user clicking "Stop sharing" in browser UI
+            screenVideoTrack.onended = () => {
+                stopScreenShare();
+            };
+
+            // === AUDIO MIXING LOGIC ===
+            if (screenAudioTrack && audioContext && scriptProcessor) {
+                console.log('🎹 ORGANIZER: Mixing Screen Audio...');
+                screenAudioInput = audioContext.createMediaStreamSource(screenStream);
+
+                // Add a small gain node to prevent clipping when mixing? 
+                // For now, direct connect to scriptServer
+                screenAudioInput.connect(scriptProcessor);
+                showNotification('💻 System Audio Shared', 'success');
+            } else if (!screenAudioTrack) {
+                console.log('⚠️ No system audio track found (User might have unchecked "Share Audio")');
+            }
+
+            // Update preview to show screen
+            videoElement.srcObject = screenStream;
+
+            // Update Button
+            btn.classList.add('bg-red-600', 'hover:bg-red-700');
+            btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            btnText.textContent = 'Stop Sharing';
+
+            showNotification('💻 Screen sharing started', 'success');
+
+        } catch (err) {
+            console.error('❌ Screen share error:', err);
+            showNotification('Failed to share screen', 'error');
+        }
+    }
+
+    function stopScreenShare() {
+        const btn = document.getElementById('screenShareBtn');
+        const btnText = document.getElementById('screenShareText');
+        const videoElement = document.getElementById('livePreview');
+
+        if (!screenStream) return;
+
+        // Stop Mixing Screen Audio
+        if (screenAudioInput) {
+            console.log('🎹 ORGANIZER: Unmixing Screen Audio');
+            screenAudioInput.disconnect();
+            screenAudioInput = null;
+        }
+
+        // Stop screen tracks
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+
+        // Revert to Camera
+        if (activeLocalStream) {
+            videoElement.srcObject = activeLocalStream;
+            showNotification('📷 Reverted to camera', 'info');
+        }
+
+        // Update Button
+        btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+        btnText.textContent = 'Share Screen';
+    }
+
+    // Audio Context Globals
+    let audioContext;
+    let scriptProcessor;
+    let audioInput;
+
+    // Helper: Convert Float32 to Int16
+    function floatTo16BitPCM(output, offset, input) {
+        for (let i = 0; i < input.length; i++, offset++) {
+            let s = Math.max(-1, Math.min(1, input[i]));
+            output[offset] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+    }
+
+    function startAudioStreaming() {
+        console.log('🎤 ORGANIZER: Starting PCM Audio Stream...');
+
+        if (!activeLocalStream) return;
+
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+
+            // Create source from the active stream (microphone)
+            audioInput = audioContext.createMediaStreamSource(activeLocalStream);
+
+            // Buffer size 4096 = ~92ms latency at 44.1kHz
+            scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            audioInput.connect(scriptProcessor);
+            scriptProcessor.connect(audioContext.destination);
+
+            scriptProcessor.onaudioprocess = (e) => {
+                if (!isStreaming) return;
+
+                const inputData = e.inputBuffer.getChannelData(0);
+
+                // Convert to Int16 to save bandwidth
+                const int16Buffer = new Int16Array(inputData.length);
+                floatTo16BitPCM(int16Buffer, 0, inputData);
+
+                if (socket.connected) {
+                    audioChunksSent++;
+                    socket.emit('stream_audio_pcm', {
+                        event_id: event_id,
+                        audio: int16Buffer.buffer, // Send ArrayBuffer
+                        sampleRate: audioContext.sampleRate
+                    });
+                }
+            };
+
+            console.log('✅ ORGANIZER: PCM Audio Processor started');
+
+        } catch (e) {
+            console.error('❌ Audio Start Error:', e);
+            showNotification('Audio Error: ' + e.message, 'error');
+        }
+    }
+
+    function startVideoStreaming(videoElement) {
+        console.log('📹 ORGANIZER: Setting up video streaming...');
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;
+        canvas.height = 480;
+
+        timerWorker.postMessage('start');
+        timerWorker.onmessage = function () {
+            // Check if socket is connected to avoid errors
+            if (!socket.connected || !isStreaming) return;
+
+            if (videoElement.readyState === 4) {
+                framesSent++;
+
+                ctx.drawImage(videoElement, 0, 0, 640, 480);
+                const frameData = canvas.toDataURL('image/jpeg', 0.5);
+
+                socket.emit('stream_frame', {
+                    event_id: event_id,
+                    image: frameData
+                });
+            }
+        };
+    }
+
+    function stopStreaming() {
+        console.log('🛑 ORGANIZER: Stopping stream...');
+
+        timerWorker.postMessage('stop');
+
+        // Cleanup Web Audio API
+        if (scriptProcessor) {
+            scriptProcessor.disconnect();
+            scriptProcessor = null;
+        }
+        if (audioInput) {
+            audioInput.disconnect();
+            audioInput = null;
+        }
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
+        console.log('🎤 ORGANIZER: Audio stopped');
+
+        // Stop Camera Stream
+        if (activeLocalStream) {
+            activeLocalStream.getTracks().forEach(track => {
+                console.log(`🛑 ORGANIZER: Stopping track: ${track.kind}`);
+                track.stop();
+            });
+            activeLocalStream = null;
+        }
+
+        // Stop Screen Share Stream
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+
+        socket.emit('stop_stream', { event_id: event_id });
+
+        // Update UI
+        document.getElementById('organizerVideoArea').classList.add('hidden');
+        const liveBtn = document.getElementById('liveBtn');
+        liveBtn.innerHTML = '<i class="fas fa-video mr-2"></i> Start Stream';
+        liveBtn.classList.remove('animate-pulse', 'bg-gray-600');
+        liveBtn.classList.add('bg-red-600');
+
+        // Disable Screen Share Button
+        const screenShareBtn = document.getElementById('screenShareBtn');
+        if (screenShareBtn) {
+            screenShareBtn.disabled = true;
+            screenShareBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            screenShareBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            screenShareBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            document.getElementById('screenShareText').textContent = 'Share Screen';
+        }
+
+        isStreaming = false;
+        showNotification('Stream ended', 'info');
+    }
+
+    // Socket events
+    socket.on('connect', () => {
+        console.log('✅ ORGANIZER: Connected to server');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ ORGANIZER: Disconnected from server');
+        if (isStreaming) {
+            showNotification('Connection lost. Stream stopped.', 'error');
+            stopStreaming();
+        }
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('🔴 ORGANIZER: Connection error:', error);
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        console.log('👋 ORGANIZER: Page unloading');
+        if (isStreaming) {
+            stopStreaming();
+        }
+    });
+
+    // Debug info
+    setInterval(() => {
+        if (isStreaming) {
+            console.log(`📊 ORGANIZER STATUS: Frames sent: ${framesSent}, Audio chunks: ${audioChunksSent}, Connected: ${socket.connected}`);
+        }
+    }, 5000);
+
+    console.log('🎬 ORGANIZER: Script initialized');
+</script>
+{% endblock %}

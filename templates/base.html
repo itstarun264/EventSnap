@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}EventSnap{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+    <style>
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #020617; /* Very Dark Blue/Black */
+            color: #e2e8f0; /* Light Gray Text */
+            overflow-x: hidden; 
+        }
+        
+        /* Glassmorphism Classes */
+        .glass {
+            background: rgba(30, 41, 59, 0.4); /* Dark Slate transparent */
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Form Inputs */
+        input, select, textarea {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #818cf8 !important;
+            background-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative">
+
+    <!-- Ambient Background Light -->
+    <div class="fixed inset-0 -z-10 pointer-events-none">
+        <div class="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="fixed w-full z-50 glass border-b border-white/5 bg-slate-900/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <a href="{{ url_for('index') }}" class="flex items-center gap-3 group">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                        <i class="fas fa-camera-retro"></i>
+                    </div>
+                    <span class="text-xl font-bold text-white tracking-wide">EventSnap</span>
+                </a>
+                
+                <div class="flex items-center gap-4">
+                    {% if current_user.is_authenticated %}
+                        <div class="hidden md:flex items-center gap-3 px-4 py-2 rounded-full glass bg-white/5 border border-white/10">
+                            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                            <span class="text-sm font-medium text-gray-300">{{ current_user.name }}</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-white/10 text-white/80 uppercase">{{ current_user.role }}</span>
+                        </div>
+                        <a href="{{ url_for('dashboard') }}" class="text-gray-400 hover:text-white transition text-sm font-semibold">Dashboard</a>
+                        <a href="{{ url_for('logout') }}" class="px-5 py-2 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition text-sm font-medium">Logout</a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="text-gray-300 hover:text-white font-medium text-sm">Sign In</a>
+                        <a href="{{ url_for('register') }}" class="px-5 py-2.5 rounded-full bg-white text-slate-900 font-bold text-sm hover:bg-gray-100 transition shadow-[0_0_15px_rgba(255,255,255,0.2)]">Get Started</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="flex-grow pt-28 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full relative z-10">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-8 space-y-3 max-w-2xl mx-auto">
+                    {% for category, message in messages %}
+                        <div class="p-4 rounded-xl glass border-l-4 {% if category == 'error' %}border-red-500 bg-red-500/10 text-red-100{% else %}border-green-500 bg-green-500/10 text-green-100{% endif %} flex items-center justify-between shadow-lg backdrop-blur-md" data-aos="fade-down">
+                            <div class="flex items-center gap-3">
+                                <i class="fas {% if category == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %}"></i>
+                                <span class="font-medium">{{ message }}</span>
+                            </div>
+                            <button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100"><i class="fas fa-times"></i></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-white/5 bg-slate-900/80 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto py-8 px-4 text-center">
+            <p class="text-gray-500 text-sm">© 2024 EventSnap. Designed for the Future.</p>
+        </div>
+    </footer>
+
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>AOS.init({ duration: 800, once: true, offset: 50 });</script>
+</body>
+</html>

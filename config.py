@@ -2,7 +2,7 @@ import os
 
 class Config:
     SECRET_KEY = 'eventsnap-secret-key-2024'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///eventsnap.db'
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Upload folders

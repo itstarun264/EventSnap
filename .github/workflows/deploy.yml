@@ -1,0 +1,23 @@
+name: Sync to Hugging Face Hub
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Replace 'itstarun264/EventSnap' below with your actual Hugging Face Space path if different
+          git push --force https://itstarun264:$HF_TOKEN@huggingface.co/spaces/itstarun264/EventSnap main

@@ -8,7 +8,7 @@ from datetime import datetime
 from functools import wraps
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify, send_from_directory
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -55,6 +55,18 @@ login_manager.login_view = 'login'
 # Ensure all upload directories exist
 for folder in [Config.UPLOAD_FOLDER, Config.PHOTOS_FOLDER, Config.POSTERS_FOLDER, Config.SELFIES_FOLDER]:
     os.makedirs(folder, exist_ok=True)
+
+# Ensure database directory exists if using SQLite
+if Config.SQLALCHEMY_DATABASE_URI.startswith("sqlite:///"):
+    db_file = Config.SQLALCHEMY_DATABASE_URI.replace("sqlite:///", "")
+    db_dir = os.path.dirname(db_file)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
+# Route to serve uploads from external persistent directory if configured
+@app.route('/static/uploads/<path:filename>')
+def serve_uploads(filename):
+    return send_from_directory(Config.UPLOAD_FOLDER, filename)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -1087,8 +1099,9 @@ def handle_disconnect():
 # Keep only one:
 if __name__ == '__main__':
     init_db()
+    port = int(os.environ.get("PORT", 5000))
     print("\n" + "="*50)
     print("🚀 EVENT SNAP SERVER RUNNING")
-    print(f"📍 URL: http://127.0.0.1:5000")
+    print(f"📍 URL: http://127.0.0.1:{port}")
     print("="*50 + "\n")
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=port, debug=True, allow_unsafe_werkzeug=True)

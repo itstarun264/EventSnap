@@ -54,6 +54,28 @@
     </div>
 </div>
 
+<!-- 2. VIDEO PRESENTATION SECTION -->
+<div class="mb-32 text-center" data-aos="fade-up">
+    <span class="text-indigo-400 font-bold uppercase tracking-widest text-xs">Product Demo</span>
+    <h2 class="text-4xl md:text-5xl font-black text-white mt-4 mb-12 tracking-tight">Watch EventSnap in Action</h2>
+    
+    <div class="max-w-4xl mx-auto relative rounded-[2.5rem] overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(99,102,241,0.2)] bg-black/40 p-3 backdrop-blur-md">
+        <div class="aspect-video w-full rounded-2xl overflow-hidden relative group">
+            <video id="presentationVideo" class="w-full h-full object-cover rounded-2xl" controls poster="{{ url_for('static', filename='uploads/posters/9db72379_Tarun.png') }}">
+                <source src="{{ url_for('static', filename='video/presentation.mp4') }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="mt-6 text-gray-400 text-sm flex justify-center gap-8 items-center flex-wrap px-4">
+            <span class="flex items-center gap-2"><i class="fas fa-broadcast-tower text-red-400"></i> Live Streams</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-white/10 hidden sm:block"></span>
+            <span class="flex items-center gap-2"><i class="fas fa-brain text-purple-400"></i> AI Tagging & Searching</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-white/10 hidden sm:block"></span>
+            <span class="flex items-center gap-2"><i class="fas fa-video text-blue-400"></i> Event Reels</span>
+        </div>
+    </div>
+</div>
+
 <!-- 2. LIVE BROADCAST HIGHLIGHT -->
 <div class="mb-32 relative" data-aos="fade-up">
     <div class="absolute -inset-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-[3rem] blur opacity-20"></div>

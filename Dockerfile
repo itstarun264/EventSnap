@@ -25,9 +25,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Pre-download the CLIP model so it is cached in the Docker image
 RUN python -c "from transformers import CLIPProcessor, CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')"
 
-# Pre-download DeepFace VGG-Face model weights
-RUN python -c "from deepface import DeepFace; DeepFace.build_model('VGG-Face')"
-
 # Copy the rest of the application files
 COPY --chown=user . $HOME/app
 

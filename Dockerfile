@@ -26,9 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN python -c "from transformers import CLIPProcessor, CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')"
 
 # Pre-download DeepFace VGG-Face model weights
-RUN python -c "from deepface import DeepFace; import numpy as np; img = np.zeros((224, 224, 3), dtype=np.uint8); \
-    try: DeepFace.verify(img, img, model_name='VGG-Face', enforce_detection=False) \
-    except Exception as e: print('Weights cached or expected error:', e)"
+RUN python -c "from deepface import DeepFace; DeepFace.build_model('VGG-Face')"
 
 # Copy the rest of the application files
 COPY --chown=user . $HOME/app

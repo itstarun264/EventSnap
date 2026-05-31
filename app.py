@@ -3,6 +3,7 @@ import json
 import secrets
 import zipfile
 import base64
+import threading
 from io import BytesIO
 from datetime import datetime
 from functools import wraps
@@ -23,25 +24,21 @@ except ImportError:
     ML_CLASSIFIER_AVAILABLE = False
     print("⚠️ ml_classifier.py not found. AI Auto-tagging will be disabled.")
 
-# 2. Face Recognition (DeepFace or FaceRecognition)
+# 2. Face Recognition (FaceMatcher using facenet-pytorch)
 FACE_RECOGNITION_AVAILABLE = False
-DEEPFACE_AVAILABLE = False
-
 try:
-    from deepface import DeepFace
-    DEEPFACE_AVAILABLE = True
-    FACE_RECOGNITION_AVAILABLE = True
-    print("✅ DeepFace is available for AI face matching!")
-except ImportError:
-    try:
-        import face_recognition
-        FACE_RECOGNITION_AVAILABLE = True
-        print("✅ face_recognition library is available!")
-    except ImportError:
-        print("⚠️ No face recognition library available. 'Find My Photos' will be disabled.")
+    from face_matcher import FaceMatcher
+    matcher = FaceMatcher()
+    FACE_RECOGNITION_AVAILABLE = matcher.initialize()
+    if FACE_RECOGNITION_AVAILABLE:
+        print("✅ FaceMatcher (facenet-pytorch) is available for AI face matching!")
+    else:
+        print("⚠️ FaceMatcher initialization failed. 'Find My Photos' will be disabled.")
+except Exception as e:
+    print(f"⚠️ Error importing/loading FaceMatcher: {e}. 'Find My Photos' will be disabled.")
 
 from config import Config
-from models import db, User, Event, Photo, VolunteerAssignment, EventAccess
+from models import db, User, Event, Photo, VolunteerAssignment, EventAccess, PhotoMatch
 
 # --- APP INITIALIZATION ---
 app = Flask(__name__)
@@ -71,6 +68,19 @@ def serve_uploads(filename):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+@app.before_request
+def enforce_profile_picture():
+    # Only enforce if logged in, role is viewer, and profile picture is missing
+    if current_user.is_authenticated and current_user.role == 'viewer':
+        if not current_user.profile_pic:
+            # Allow logout, static files, and the profile setup route
+            allowed_endpoints = ['viewer_profile_setup', 'logout', 'static', 'serve_uploads']
+            if request.endpoint not in allowed_endpoints:
+                flash("Please set up your profile picture to access your account.", "info")
+                return redirect(url_for('viewer_profile_setup'))
+
 
 # --- DECORATORS & HELPERS ---
 
@@ -119,12 +129,20 @@ def save_base64_image(base64_data, folder, prefix="camera"):
 def find_matching_photos(selfie_path, event_id):
     """
     Scans an event's gallery to find photos matching the uploaded selfie.
-    Uses DeepFace (preferred) or face_recognition.
+    Uses FaceMatcher (MTCNN + FaceNet) for fast and accurate face matching.
     """
     matched_photos = []
     photos = Photo.query.filter_by(event_id=event_id).all()
     
     if not os.path.exists(selfie_path):
+        return []
+
+    if not FACE_RECOGNITION_AVAILABLE:
+        print("⚠️ Face recognition is not available.")
+        return []
+
+    selfie_embedding = matcher.get_selfie_embedding(selfie_path)
+    if selfie_embedding is None:
         return []
 
     for photo in photos:
@@ -133,37 +151,128 @@ def find_matching_photos(selfie_path, event_id):
             continue
         
         try:
-            if DEEPFACE_AVAILABLE:
-                # DeepFace verification (High Accuracy)
-                result = DeepFace.verify(
-                    img1_path=selfie_path, 
-                    img2_path=photo_path, 
-                    model_name='VGG-Face', 
-                    enforce_detection=False,
-                    detector_backend='opencv'
-                )
-                if result['verified']:
-                    matched_photos.append(photo)
-            
-            elif FACE_RECOGNITION_AVAILABLE:
-                # Traditional face_recognition (Fast)
-                import face_recognition
-                known_img = face_recognition.load_image_file(selfie_path)
-                unknown_img = face_recognition.load_image_file(photo_path)
-                
-                known_encs = face_recognition.face_encodings(known_img)
-                unknown_encs = face_recognition.face_encodings(unknown_img)
-                
-                if known_encs and unknown_encs:
-                    # Compare first face found in selfie with all faces in event photo
-                    results = face_recognition.compare_faces(unknown_encs, known_encs[0], tolerance=0.6)
-                    if True in results:
-                        matched_photos.append(photo)
+            if matcher.match_selfie_to_photo(selfie_embedding, photo_path):
+                matched_photos.append(photo)
         except Exception as e:
             print(f"Matching error for photo {photo.id}: {e}")
             continue
             
     return matched_photos
+
+
+def check_face_match(img1_path, img2_path):
+    """
+    Compares two faces. Returns True if they match, False otherwise.
+    """
+    if not os.path.exists(img1_path) or not os.path.exists(img2_path):
+        return False
+        
+    if not FACE_RECOGNITION_AVAILABLE:
+        return False
+
+    try:
+        selfie_emb = matcher.get_selfie_embedding(img1_path)
+        if selfie_emb is not None:
+            return matcher.match_selfie_to_photo(selfie_emb, img2_path)
+    except Exception as e:
+        print(f"Error comparing faces: {e}")
+    return False
+
+
+def scan_photos_for_student_matches_async(app_context, photo_ids):
+    """
+    Background worker to scan newly uploaded photos for all students.
+    Highly optimized: caches user selfie embeddings and does a single-pass face scan.
+    """
+    if not FACE_RECOGNITION_AVAILABLE:
+        return
+
+    with app_context:
+        photos = Photo.query.filter(Photo.id.in_(photo_ids)).all()
+        if not photos:
+            return
+            
+        students = User.query.filter(User.role == 'viewer', User.profile_pic != None).all()
+        if not students:
+            return
+            
+        # Get selfie embeddings for all students first to avoid recalculating!
+        student_embeddings = {}
+        for student in students:
+            selfie_path = os.path.join(Config.SELFIES_FOLDER, student.profile_pic)
+            if os.path.exists(selfie_path):
+                emb = matcher.get_selfie_embedding(selfie_path)
+                if emb is not None:
+                    student_embeddings[student.id] = emb
+                    
+        if not student_embeddings:
+            return
+
+        for photo in photos:
+            photo_path = os.path.join(Config.PHOTOS_FOLDER, photo.filename)
+            if not os.path.exists(photo_path):
+                continue
+                
+            try:
+                # Detect all faces in this photo once
+                from PIL import Image
+                import torch
+                img = Image.open(photo_path).convert('RGB')
+                if not matcher.initialize():
+                    continue
+                faces = matcher.mtcnn_multi(img)
+                if faces is not None:
+                    with torch.no_grad():
+                        photo_embeddings = matcher.resnet(faces.to(matcher.device)) # [N, 512]
+                        
+                        for student_id, selfie_emb in student_embeddings.items():
+                            selfie_tensor = torch.tensor(selfie_emb, device=matcher.device)
+                            # Calculate Euclidean distances
+                            distances = torch.norm(photo_embeddings - selfie_tensor, dim=1)
+                            min_dist = torch.min(distances).item()
+                            if min_dist < 0.8: # Threshold
+                                # Check if already matched
+                                existing = PhotoMatch.query.filter_by(user_id=student_id, photo_id=photo.id).first()
+                                if not existing:
+                                    match = PhotoMatch(user_id=student_id, photo_id=photo.id)
+                                    db.session.add(match)
+            except Exception as e:
+                print(f"Error scanning photo {photo.id}: {e}")
+        db.session.commit()
+
+
+def scan_user_for_photo_matches_async(app_context, user_id):
+    """
+    Background worker to scan all existing photos for a newly registered/updated student.
+    """
+    if not FACE_RECOGNITION_AVAILABLE:
+        return
+
+    with app_context:
+        student = User.query.get(user_id)
+        if not student or not student.profile_pic:
+            return
+            
+        selfie_path = os.path.join(Config.SELFIES_FOLDER, student.profile_pic)
+        if not os.path.exists(selfie_path):
+            return
+            
+        selfie_emb = matcher.get_selfie_embedding(selfie_path)
+        if selfie_emb is None:
+            return
+            
+        photos = Photo.query.all()
+        for photo in photos:
+            photo_path = os.path.join(Config.PHOTOS_FOLDER, photo.filename)
+            if not os.path.exists(photo_path):
+                continue
+                
+            if matcher.match_selfie_to_photo(selfie_emb, photo_path):
+                existing = PhotoMatch.query.filter_by(user_id=student.id, photo_id=photo.id).first()
+                if not existing:
+                    match = PhotoMatch(user_id=student.id, photo_id=photo.id)
+                    db.session.add(match)
+        db.session.commit()
 
 # ==============================================================================
 #                                PUBLIC ROUTES
@@ -509,6 +618,7 @@ def organizer_upload_photos(event_id):
         return redirect(url_for('manage_event', event_id=event_id))
     
     files = request.files.getlist('photos')
+    photos_to_match = []
     for file in files:
         if file and allowed_file(file.filename):
             fn = secure_filename(f"{secrets.token_hex(8)}_{file.filename}")
@@ -528,8 +638,19 @@ def organizer_upload_photos(event_id):
                 uploaded_by=current_user.id
             )
             db.session.add(new_photo)
+            photos_to_match.append(new_photo)
             
     db.session.commit()
+    
+    # Auto-match faces in background
+    if FACE_RECOGNITION_AVAILABLE and photos_to_match:
+        photo_ids = [p.id for p in photos_to_match if p.id is not None]
+        if photo_ids:
+            threading.Thread(
+                target=scan_photos_for_student_matches_async,
+                args=(app.application_context(), photo_ids)
+            ).start()
+            
     flash('Gallery updated and analyzed by AI.', 'success')
     return redirect(url_for('manage_event', event_id=event_id))
 
@@ -617,6 +738,7 @@ def volunteer_dashboard():
 @role_required('volunteer')
 def volunteer_upload_photos(event_id):
     files = request.files.getlist('photos')
+    photos_to_match = []
     for file in files:
         if file and allowed_file(file.filename):
             fn = secure_filename(f"{secrets.token_hex(8)}_{file.filename}")
@@ -628,7 +750,18 @@ def volunteer_upload_photos(event_id):
             
             photo = Photo(filename=fn, tags=tags, event_id=event_id, uploaded_by=current_user.id)
             db.session.add(photo)
+            photos_to_match.append(photo)
     db.session.commit()
+    
+    # Auto-match faces in background
+    if FACE_RECOGNITION_AVAILABLE and photos_to_match:
+        photo_ids = [p.id for p in photos_to_match if p.id is not None]
+        if photo_ids:
+            threading.Thread(
+                target=scan_photos_for_student_matches_async,
+                args=(app.application_context(), photo_ids)
+            ).start()
+            
     flash('Photos uploaded to live feed.', 'success')
     return redirect(url_for('volunteer_dashboard'))
 
@@ -648,12 +781,74 @@ def volunteer_camera_upload(event_id):
         photo = Photo(filename=fn, tags=tags, event_id=event_id, uploaded_by=current_user.id)
         db.session.add(photo)
         db.session.commit()
+        
+        # Auto-match face in background
+        if FACE_RECOGNITION_AVAILABLE:
+            threading.Thread(
+                target=scan_photos_for_student_matches_async,
+                args=(app.application_context(), [photo.id])
+            ).start()
+            
         return jsonify({'success': True, 'message': 'Snapshot captured!'})
     return jsonify({'success': False}), 500
 
 # ==============================================================================
 #                                VIEWER ROUTES
 # ==============================================================================
+
+@app.route('/viewer/profile-setup', methods=['GET', 'POST'])
+@login_required
+@role_required('viewer')
+def viewer_profile_setup():
+    if request.method == 'POST':
+        path = None
+        fn = None
+        # Check webcam upload (JSON base64)
+        if request.is_json:
+            data = request.get_json()
+            if data and 'image' in data:
+                fn, path = save_base64_image(data['image'], Config.SELFIES_FOLDER, f"user_{current_user.id}")
+        # Check file upload (Form multipart)
+        elif 'profile_pic' in request.files:
+            file = request.files['profile_pic']
+            if file and allowed_file(file.filename):
+                fn = secure_filename(f"user_{current_user.id}_{secrets.token_hex(4)}_{file.filename}")
+                path = os.path.join(Config.SELFIES_FOLDER, fn)
+                file.save(path)
+                
+        if path and fn:
+            # Delete old profile picture if exists
+            if current_user.profile_pic:
+                try:
+                    old_path = os.path.join(Config.SELFIES_FOLDER, current_user.profile_pic)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                except Exception as e:
+                    print(f"Error removing old profile picture: {e}")
+                    
+            # Save new profile picture
+            current_user.profile_pic = fn
+            db.session.commit()
+            
+            # Retroactively search for matching photos in the background
+            if FACE_RECOGNITION_AVAILABLE:
+                threading.Thread(
+                    target=scan_user_for_photo_matches_async,
+                    args=(app.application_context(), current_user.id)
+                ).start()
+                
+            flash("Profile picture updated successfully!", "success")
+            if request.is_json:
+                return jsonify({'success': True, 'redirect': url_for('dashboard')})
+            return redirect(url_for('dashboard'))
+            
+        flash("Failed to save profile picture.", "error")
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'Failed to save photo.'})
+        return redirect(url_for('viewer_profile_setup'))
+        
+    return render_template('viewer/profile_setup.html')
+
 
 @app.route('/viewer/dashboard')
 @login_required
@@ -666,6 +861,36 @@ def viewer_dashboard():
     unlocked_ids = [a.event_id for a in access]
     
     return render_template('viewer/dashboard.html', events=all_events, unlocked_ids=unlocked_ids)
+
+
+@app.route('/viewer/my-photos')
+@login_required
+@role_required('viewer')
+def my_photos():
+    matches = PhotoMatch.query.filter_by(user_id=current_user.id).order_by(PhotoMatch.matched_at.desc()).all()
+    matched_photos = [m.photo for m in matches]
+    return render_template('viewer/my_photos.html', matched_photos=matched_photos)
+
+
+@app.route('/viewer/download-all-my-photos')
+@login_required
+@role_required('viewer')
+def download_all_my_photos():
+    matches = PhotoMatch.query.filter_by(user_id=current_user.id).all()
+    if not matches:
+        flash("No matched photos to download.", "info")
+        return redirect(url_for('my_photos'))
+        
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for m in matches:
+            p = m.photo
+            path = os.path.join(Config.PHOTOS_FOLDER, p.filename)
+            if os.path.exists(path):
+                zf.write(path, f"{secure_filename(p.event.name)}/{p.filename}")
+                
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=f'{secure_filename(current_user.name)}_all_my_photos.zip')
 
 @app.route('/viewer/unlock-event', methods=['POST'])
 @login_required
@@ -878,6 +1103,17 @@ def download_matched_photos():
 
 def init_db():
     with app.app_context():
+        # Inspect existing schema to migrate/reset if needed
+        try:
+            inspector = db.inspect(db.engine)
+            if 'users' in inspector.get_table_names():
+                columns = [c['name'] for c in inspector.get_columns('users')]
+                if 'profile_pic' not in columns:
+                    print("🔄 Database schema is outdated (missing profile_pic). Resetting...")
+                    db.drop_all()
+        except Exception as e:
+            print(f"⚠️ Error checking schema: {e}")
+            
         db.create_all()
         # Create Default Master Admin
         if not User.query.filter_by(email='admin@eventsnap.com').first():
@@ -910,6 +1146,81 @@ from flask_socketio import join_room, leave_room, emit
 active_streams = {}
 audio_stats = {}
 audio_headers = {}  # Cache the first chunk (header) for each event
+
+def run_realtime_face_search_async(app_context, sid, event_id, selfie_path):
+    with app_context:
+        try:
+            event = Event.query.get(event_id)
+            if not event:
+                socketio.emit('face_search_error', {'message': 'Event not found'}, room=sid)
+                return
+                
+            photos = Photo.query.filter_by(event_id=event_id).all()
+            total_photos = len(photos)
+            
+            socketio.emit('face_search_status', {'message': 'Starting scan...', 'scanned': 0, 'total': total_photos}, room=sid)
+            
+            selfie_emb = matcher.get_selfie_embedding(selfie_path)
+            if selfie_emb is None:
+                socketio.emit('face_search_error', {'message': 'No face detected in your search photo. Please make sure your face is clearly visible.'}, room=sid)
+                return
+
+            scanned_count = 0
+            for photo in photos:
+                scanned_count += 1
+                photo_path = os.path.join(Config.PHOTOS_FOLDER, photo.filename)
+                
+                socketio.emit('face_search_status', {
+                    'message': f"Scanning photo {scanned_count} of {total_photos}...",
+                    'scanned': scanned_count,
+                    'total': total_photos
+                }, room=sid)
+                
+                if matcher.match_selfie_to_photo(selfie_emb, photo_path):
+                    socketio.emit('face_match_found', {
+                        'id': photo.id,
+                        'filename': photo.filename,
+                        'original_filename': photo.original_filename or photo.filename,
+                        'download_url': url_for('download_photo', photo_id=photo.id),
+                        'image_url': url_for('static', filename='uploads/photos/' + photo.filename)
+                    }, room=sid)
+            
+            socketio.emit('face_search_completed', {'total_scanned': scanned_count}, room=sid)
+        except Exception as e:
+            print(f"Error in real-time face search: {e}")
+            socketio.emit('face_search_error', {'message': 'An error occurred during scanning.'}, room=sid)
+        finally:
+            try:
+                if os.path.exists(selfie_path):
+                    os.remove(selfie_path)
+            except:
+                pass
+
+
+@socketio.on('start_face_search')
+def handle_start_face_search(data):
+    event_id = data.get('event_id')
+    image_data = data.get('image')
+    sid = request.sid
+    
+    if not event_id or not image_data:
+        emit('face_search_error', {'message': 'Missing event ID or image data'}, room=sid)
+        return
+        
+    fn, path = save_base64_image(image_data, Config.SELFIES_FOLDER, f"search_{sid}")
+    if fn and path:
+        if FACE_RECOGNITION_AVAILABLE:
+            threading.Thread(
+                target=run_realtime_face_search_async,
+                args=(app.application_context(), sid, int(event_id), path)
+            ).start()
+        else:
+            emit('face_search_error', {'message': 'Face recognition is offline.'}, room=sid)
+            try: os.remove(path)
+            except: pass
+    else:
+        emit('face_search_error', {'message': 'Failed to process search photo.'}, room=sid)
+
 
 @socketio.on('connect')
 def handle_connect():

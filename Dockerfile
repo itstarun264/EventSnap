@@ -22,8 +22,9 @@ COPY --chown=user requirements.txt $HOME/app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the CLIP model so it is cached in the Docker image
+# Pre-download the CLIP and FaceNet models so they are cached in the Docker image
 RUN python -c "from transformers import CLIPProcessor, CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')"
+RUN python -c "from facenet_pytorch import MTCNN, InceptionResnetV1; MTCNN(); InceptionResnetV1(pretrained='vggface2')"
 
 # Copy the rest of the application files
 COPY --chown=user . $HOME/app

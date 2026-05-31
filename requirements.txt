@@ -1,7 +1,7 @@
 numpy
 opencv-python-headless
 Pillow
-deepface
+facenet-pytorch
 torch
 transformers
 moviepy
@@ -15,4 +15,3 @@ simple-websocket
 flask-cors
 python-dotenv
 psycopg2-binary
-tf_keras

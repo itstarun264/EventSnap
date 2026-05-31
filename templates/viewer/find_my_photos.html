@@ -43,11 +43,7 @@
             
             <!-- Option 2: Upload -->
             <div class="glass p-8 rounded-3xl border border-white/5 cursor-pointer group hover:border-blue-500/50 hover:bg-white/5 transition-all duration-300 relative" data-aos="fade-up" data-aos-delay="100">
-                <form method="POST" enctype="multipart/form-data" id="uploadForm" class="absolute inset-0 z-20 cursor-pointer">
-                    <input type="file" name="selfie" accept="image/*" required 
-                           class="w-full h-full opacity-0 cursor-pointer"
-                           onchange="document.getElementById('uploadForm').submit();">
-                </form>
+                <input type="file" id="selfieFileInput" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" onchange="handleFileSelect(event)">
                 
                 <div class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 text-blue-400 group-hover:scale-110 transition-transform duration-300 relative z-10 pointer-events-none">
                     <i class="fas fa-cloud-upload-alt text-3xl"></i>
@@ -85,53 +81,28 @@
 </div>
 
 <!-- Results Section -->
-{% if matched_photos %}
-<div class="max-w-7xl mx-auto mt-16" data-aos="fade-up">
+<div id="searchResultsSection" class="max-w-7xl mx-auto mt-16 hidden animate-fade-in" data-aos="fade-up">
     <div class="flex items-center justify-between mb-8">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
-                <i class="fas fa-check"></i>
+            <div id="statusIndicator" class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                <i class="fas fa-spinner animate-spin"></i>
             </div>
-            <h2 class="text-2xl font-bold text-white">
-                Found {{ matched_photos|length }} Match{% if matched_photos|length > 1 %}es{% endif %}
+            <h2 class="text-2xl font-bold text-white" id="searchHeader">
+                Scanning Gallery...
             </h2>
         </div>
         
-        <form method="POST" action="{{ url_for('download_matched_photos') }}">
-            {% for photo in matched_photos %}
-                <input type="hidden" name="photo_ids" value="{{ photo.id }}">
-            {% endfor %}
+        <form method="POST" action="{{ url_for('download_matched_photos') }}" id="downloadAllForm" class="hidden">
             <button type="submit" class="px-6 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-500 transition shadow-lg shadow-green-600/20 flex items-center">
-                <i class="fas fa-download mr-2"></i> Download All
+                <i class="fas fa-download mr-2"></i> Download Matches
             </button>
         </form>
     </div>
     
-    <div class="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-        {% for photo in matched_photos %}
-        <div class="break-inside-avoid relative group rounded-xl overflow-hidden cursor-zoom-in bg-slate-800 border border-white/5">
-            <img src="{{ url_for('static', filename='uploads/photos/' ~ photo.filename) }}" 
-                 class="w-full h-auto block transform transition-transform duration-700 group-hover:scale-110">
-            
-            <div class="absolute top-2 right-2 z-10">
-                <span class="px-2 py-1 rounded bg-green-500 text-white text-[10px] font-bold uppercase tracking-wide shadow-lg">
-                    Match
-                </span>
-            </div>
-            
-            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                <div class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                    <a href="{{ url_for('download_photo', photo_id=photo.id) }}" 
-                       class="w-full py-2.5 rounded-lg bg-white text-slate-900 font-bold text-sm flex items-center justify-center hover:bg-gray-100 transition">
-                        <i class="fas fa-download mr-2"></i> Download
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
+    <div class="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4" id="searchResultsGrid">
+        <!-- Matches will be appended here in real-time -->
     </div>
 </div>
-{% endif %}
 
 <!-- Selfie Camera Modal (Dark Theme) -->
 <div id="selfieCameraModal" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-md">
@@ -190,9 +161,108 @@
 </div>
 
 <script>
+const socket = io();
 let selfieStream = null;
 let selfieImageData = null;
 const eventId = {{ event.id }};
+let matchedPhotoIds = [];
+
+// Socket.IO listeners
+socket.on('connect', () => {
+    console.log('Connected to socket server for streaming face matching');
+});
+
+socket.on('face_search_status', (data) => {
+    document.getElementById('searchHeader').innerText = data.message;
+});
+
+socket.on('face_match_found', (photo) => {
+    matchedPhotoIds.push(photo.id);
+    const count = matchedPhotoIds.length;
+    
+    if (count === 1) {
+        document.getElementById('downloadAllForm').classList.remove('hidden');
+    }
+    
+    // Add input for download all
+    const form = document.getElementById('downloadAllForm');
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'photo_ids';
+    input.value = photo.id;
+    form.appendChild(input);
+    
+    // Add card to grid
+    const grid = document.getElementById('searchResultsGrid');
+    const card = document.createElement('div');
+    card.className = 'break-inside-avoid relative group rounded-xl overflow-hidden cursor-zoom-in bg-slate-800 border border-white/5 transition-all duration-500 transform hover:scale-[1.02]';
+    card.innerHTML = `
+        <img src="${photo.image_url}" class="w-full h-auto block transform transition-transform duration-700 group-hover:scale-110">
+        <div class="absolute top-2 right-2 z-10">
+            <span class="px-2 py-1 rounded bg-green-500 text-white text-[10px] font-bold uppercase tracking-wide shadow-lg">
+                Match
+            </span>
+        </div>
+        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+            <div class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                <a href="${photo.download_url}" class="w-full py-2.5 rounded-lg bg-white text-slate-900 font-bold text-sm flex items-center justify-center hover:bg-gray-100 transition">
+                    <i class="fas fa-download mr-2"></i> Download
+                </a>
+            </div>
+        </div>
+    `;
+    grid.appendChild(card);
+});
+
+socket.on('face_search_completed', (data) => {
+    const spinner = document.getElementById('statusIndicator');
+    spinner.className = "w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400";
+    spinner.innerHTML = '<i class="fas fa-check"></i>';
+    
+    const count = matchedPhotoIds.length;
+    document.getElementById('searchHeader').innerText = `Scan complete! Found ${count} match${count === 1 ? '' : 'es'} in ${data.total_scanned} photos.`;
+    
+    document.getElementById('selfieSearching').classList.add('hidden');
+});
+
+socket.on('face_search_error', (data) => {
+    alert(data.message || 'Error occurred during scan');
+    document.getElementById('selfieSearching').classList.add('hidden');
+});
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        selfieImageData = e.target.result;
+        startStreamingSearch();
+    };
+    reader.readAsDataURL(file);
+}
+
+function startStreamingSearch() {
+    if (!selfieImageData) return;
+    
+    matchedPhotoIds = [];
+    document.getElementById('searchResultsGrid').innerHTML = '';
+    
+    const form = document.getElementById('downloadAllForm');
+    form.classList.add('hidden');
+    form.querySelectorAll('input[name="photo_ids"]').forEach(el => el.remove());
+    
+    document.getElementById('searchResultsSection').classList.remove('hidden');
+    
+    const spinner = document.getElementById('statusIndicator');
+    spinner.className = "w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400";
+    spinner.innerHTML = '<i class="fas fa-spinner animate-spin"></i>';
+    
+    document.getElementById('searchHeader').innerText = 'Initializing scan...';
+    
+    socket.emit('start_face_search', { event_id: eventId, image: selfieImageData });
+    
+    document.getElementById('searchResultsSection').scrollIntoView({ behavior: 'smooth' });
+}
 
 function openSelfieCamera() {
     document.getElementById('selfieCameraModal').classList.remove('hidden');
@@ -241,7 +311,6 @@ function captureSelfie() {
     canvas.height = video.videoHeight;
     
     const ctx = canvas.getContext('2d');
-    // Flip horizontally for selfie
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0);
@@ -262,39 +331,9 @@ function retakeSelfie() {
     startSelfieCamera();
 }
 
-async function searchWithSelfie() {
-    if (!selfieImageData) return;
-    
-    document.getElementById('selfieSearching').classList.remove('hidden');
-    
-    try {
-        const response = await fetch(`/viewer/event/${eventId}/find-my-photos`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ image: selfieImageData })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            closeSelfieCamera();
-            if (result.count > 0) {
-                location.reload();
-            } else {
-                alert('No matching photos found. Try a clearer selfie.');
-            }
-        } else {
-            alert('Search failed: ' + (result.message || 'Unknown error'));
-            document.getElementById('selfieSearching').classList.add('hidden');
-            retakeSelfie();
-        }
-    } catch (err) {
-        console.error('Search error:', err);
-        alert('Search failed. Please try the file upload option.');
-        closeSelfieCamera();
-    }
+function searchWithSelfie() {
+    closeSelfieCamera();
+    startStreamingSearch();
 }
 </script>
 {% endblock %}

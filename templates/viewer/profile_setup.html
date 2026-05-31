@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile Setup - EventSnap{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header Section -->
+    <div class="glass rounded-3xl p-10 text-center mb-10 border border-white/5 relative overflow-hidden" data-aos="fade-down">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-purple-500/20 rounded-full blur-[80px] -mt-16 pointer-events-none"></div>
+        
+        <div class="relative z-10">
+            <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
+                <i class="fas fa-user-circle text-4xl"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-3">Set Up Profile Photo</h1>
+            <p class="text-gray-400 text-lg max-w-lg mx-auto leading-relaxed">
+                Welcome to EventSnap, {{ current_user.name }}! Please take or upload a profile photo. Our AI uses this picture to automatically find your photos in all campus events.
+            </p>
+        </div>
+    </div>
+    
+    <!-- Selection Grid -->
+    <div class="grid md:grid-cols-2 gap-6 mb-10">
+        <!-- Option 1: Camera -->
+        <div onclick="openSelfieCamera()" 
+             class="glass p-8 rounded-3xl border border-white/5 cursor-pointer group hover:border-purple-500/50 hover:bg-white/5 transition-all duration-300" data-aos="fade-up" data-aos-delay="0">
+            <div class="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mb-6 text-purple-400 group-hover:scale-110 transition-transform duration-300">
+                <i class="fas fa-camera text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Use Webcam</h3>
+            <p class="text-gray-500 text-sm">Take a quick selfie using your device's webcam.</p>
+        </div>
+        
+        <!-- Option 2: Upload -->
+        <div class="glass p-8 rounded-3xl border border-white/5 cursor-pointer group hover:border-blue-500/50 hover:bg-white/5 transition-all duration-300 relative" data-aos="fade-up" data-aos-delay="100">
+            <form method="POST" enctype="multipart/form-data" id="profileUploadForm" class="absolute inset-0 z-20 cursor-pointer">
+                <input type="file" name="profile_pic" accept="image/*" required 
+                       class="w-full h-full opacity-0 cursor-pointer"
+                       onchange="document.getElementById('profileUploadForm').submit();">
+            </form>
+            
+            <div class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 text-blue-400 group-hover:scale-110 transition-transform duration-300 relative z-10 pointer-events-none">
+                <i class="fas fa-cloud-upload-alt text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors relative z-10 pointer-events-none">Upload Picture</h3>
+            <p class="text-gray-500 text-sm relative z-10 pointer-events-none">Select a photo from your computer or device.</p>
+        </div>
+    </div>
+    
+    <!-- Tips -->
+    <div class="p-5 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex items-start gap-4 mb-6" data-aos="fade-up" data-aos-delay="200">
+        <div class="mt-1 text-blue-400"><i class="fas fa-lightbulb"></i></div>
+        <div>
+            <h4 class="font-bold text-blue-200 text-sm mb-1">Selfie Guidelines</h4>
+            <p class="text-gray-400 text-xs leading-relaxed">
+                For the best face detection results, make sure your face is well-lit and clearly visible. Avoid angles, heavy filters, sunglasses, and caps.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Camera Modal -->
+<div id="selfieCameraModal" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-md">
+    <div class="h-full flex flex-col max-w-lg mx-auto bg-black relative">
+        <!-- Header -->
+        <div class="flex justify-between items-center p-6 text-white absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent">
+            <h3 class="text-lg font-bold flex items-center gap-2">
+                <i class="fas fa-camera text-purple-500"></i> Take Profile Photo
+            </h3>
+            <button onclick="closeSelfieCamera()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition backdrop-blur-md">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Camera View -->
+        <div class="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
+            <video id="selfieStream" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+            <canvas id="selfieCanvas" class="hidden"></canvas>
+            
+            <!-- Face Guide Overlay -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50">
+                <div class="w-64 h-80 border-2 border-white/30 rounded-[50%] border-dashed"></div>
+            </div>
+        </div>
+        
+        <!-- Preview Container -->
+        <div id="selfiePreviewContainer" class="hidden absolute inset-0 bg-black z-30 flex flex-col">
+            <div class="flex-1 relative">
+                <img id="selfiePreview" class="w-full h-full object-cover transform scale-x-[-1]">
+            </div>
+            <div class="p-6 bg-black flex gap-4">
+                <button onclick="retakeSelfie()" class="flex-1 py-4 rounded-2xl bg-gray-800 text-white font-bold hover:bg-gray-700 transition">
+                    <i class="fas fa-redo mr-2"></i> Retake
+                </button>
+                <button onclick="saveProfilePic()" class="flex-1 py-4 rounded-2xl bg-purple-600 text-white font-bold hover:bg-purple-500 transition shadow-lg shadow-purple-600/30">
+                    <i class="fas fa-check mr-2"></i> Save Photo
+                </button>
+            </div>
+        </div>
+        
+        <!-- Capture Controls -->
+        <div id="selfieCaptureBtn" class="p-8 bg-black flex justify-center items-center pb-12">
+            <button onclick="captureSelfie()" 
+                    class="w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center hover:scale-110 transition-transform duration-200">
+                <div class="w-16 h-16 bg-white rounded-full"></div>
+            </button>
+        </div>
+        
+        <!-- Saving State -->
+        <div id="selfieSaving" class="hidden absolute inset-0 bg-black/90 z-40 flex flex-col items-center justify-center text-white">
+            <div class="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+            <h3 class="text-xl font-bold mb-2">Saving profile picture...</h3>
+            <p class="text-gray-400">Linking your profile with AI face detection</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let selfieStream = null;
+let selfieImageData = null;
+
+function openSelfieCamera() {
+    document.getElementById('selfieCameraModal').classList.remove('hidden');
+    startSelfieCamera();
+}
+
+function closeSelfieCamera() {
+    stopSelfieCamera();
+    document.getElementById('selfieCameraModal').classList.add('hidden');
+    document.getElementById('selfiePreviewContainer').classList.add('hidden');
+    document.getElementById('selfieCaptureBtn').classList.remove('hidden');
+    document.getElementById('selfieSaving').classList.add('hidden');
+}
+
+async function startSelfieCamera() {
+    try {
+        const video = document.getElementById('selfieStream');
+        selfieStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        video.srcObject = selfieStream;
+    } catch (err) {
+        console.error('Camera error:', err);
+        alert('Unable to access camera. Please use the file upload option instead.');
+        closeSelfieCamera();
+    }
+}
+
+function stopSelfieCamera() {
+    if (selfieStream) {
+        selfieStream.getTracks().forEach(track => track.stop());
+        selfieStream = null;
+    }
+}
+
+function captureSelfie() {
+    const video = document.getElementById('selfieStream');
+    const canvas = document.getElementById('selfieCanvas');
+    const preview = document.getElementById('selfiePreview');
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    
+    selfieImageData = canvas.toDataURL('image/jpeg', 0.9);
+    preview.src = selfieImageData;
+    
+    document.getElementById('selfiePreviewContainer').classList.remove('hidden');
+    document.getElementById('selfieCaptureBtn').classList.add('hidden');
+    
+    stopSelfieCamera();
+}
+
+function retakeSelfie() {
+    selfieImageData = null;
+    document.getElementById('selfiePreviewContainer').classList.add('hidden');
+    document.getElementById('selfieCaptureBtn').classList.remove('hidden');
+    startSelfieCamera();
+}
+
+async function saveProfilePic() {
+    if (!selfieImageData) return;
+    
+    document.getElementById('selfieSaving').classList.remove('hidden');
+    
+    try {
+        const response = await fetch("{{ url_for('viewer_profile_setup') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: selfieImageData })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeSelfieCamera();
+            window.location.href = result.redirect || "{{ url_for('dashboard') }}";
+        } else {
+            alert('Error saving picture: ' + (result.message || 'Unknown error'));
+            document.getElementById('selfieSaving').classList.add('hidden');
+            retakeSelfie();
+        }
+    } catch (err) {
+        console.error('Save error:', err);
+        alert('Failed to save profile picture. Please try again or use the file upload option.');
+        closeSelfieCamera();
+    }
+}
+</script>
+{% endblock %}

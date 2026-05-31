@@ -14,11 +14,13 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(20), nullable=False) # admin, organizer, volunteer, viewer
+    profile_pic = db.Column(db.String(255), nullable=True) # Profile photo filename
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     organized_events = db.relationship('Event', backref='organizer', lazy=True, foreign_keys='Event.organizer_id')
     volunteer_assignments = db.relationship('VolunteerAssignment', backref='volunteer', lazy=True)
+    matches = db.relationship('PhotoMatch', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -62,6 +64,9 @@ class Photo(db.Model):
     event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    matches = db.relationship('PhotoMatch', backref='photo', lazy=True, cascade='all, delete-orphan')
 
 
 class VolunteerAssignment(db.Model):
@@ -80,3 +85,12 @@ class EventAccess(db.Model):
     event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
     viewer_email = db.Column(db.String(120), nullable=False)
     accessed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PhotoMatch(db.Model):
+    __tablename__ = 'photo_matches'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    photo_id = db.Column(db.Integer, db.ForeignKey('photos.id', ondelete='CASCADE'), nullable=False)
+    matched_at = db.Column(db.DateTime, default=datetime.utcnow)

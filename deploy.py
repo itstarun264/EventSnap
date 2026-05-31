@@ -27,10 +27,10 @@ def deploy():
                 "deploy.py"
             ]
         )
-        print("\n✅ Success! Your application files have been uploaded to Hugging Face.")
-        print(f"🔗 View deployment progress here: https://huggingface.co/spaces/{repo_id}")
+        print("\nSuccess! Your application files have been uploaded to Hugging Face.")
+        print(f"View deployment progress here: https://huggingface.co/spaces/{repo_id}")
     except Exception as e:
-        print(f"\n❌ Deployment failed: {e}")
+        print(f"\nDeployment failed: {e}")
 
 if __name__ == "__main__":
     deploy()

@@ -20,4 +20,4 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # Replace 'itstarun264/EventSnap' below with your actual Hugging Face Space path if different
-          git push --force https://itstarun264:$HF_TOKEN@huggingface.co/spaces/itstarun264/EventSnap main
+          git push --force https://tarunrathod2643:$HF_TOKEN@huggingface.co/spaces/tarunrathod2643/EventSnap main

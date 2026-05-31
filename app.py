@@ -648,7 +648,7 @@ def organizer_upload_photos(event_id):
         if photo_ids:
             threading.Thread(
                 target=scan_photos_for_student_matches_async,
-                args=(app.application_context(), photo_ids)
+                args=(app.app_context(), photo_ids)
             ).start()
             
     flash('Gallery updated and analyzed by AI.', 'success')
@@ -759,7 +759,7 @@ def volunteer_upload_photos(event_id):
         if photo_ids:
             threading.Thread(
                 target=scan_photos_for_student_matches_async,
-                args=(app.application_context(), photo_ids)
+                args=(app.app_context(), photo_ids)
             ).start()
             
     flash('Photos uploaded to live feed.', 'success')
@@ -786,7 +786,7 @@ def volunteer_camera_upload(event_id):
         if FACE_RECOGNITION_AVAILABLE:
             threading.Thread(
                 target=scan_photos_for_student_matches_async,
-                args=(app.application_context(), [photo.id])
+                args=(app.app_context(), [photo.id])
             ).start()
             
         return jsonify({'success': True, 'message': 'Snapshot captured!'})
@@ -834,7 +834,7 @@ def viewer_profile_setup():
             if FACE_RECOGNITION_AVAILABLE:
                 threading.Thread(
                     target=scan_user_for_photo_matches_async,
-                    args=(app.application_context(), current_user.id)
+                    args=(app.app_context(), current_user.id)
                 ).start()
                 
             flash("Profile picture updated successfully!", "success")
@@ -1212,7 +1212,7 @@ def handle_start_face_search(data):
         if FACE_RECOGNITION_AVAILABLE:
             threading.Thread(
                 target=run_realtime_face_search_async,
-                args=(app.application_context(), sid, int(event_id), path)
+                args=(app.app_context(), sid, int(event_id), path)
             ).start()
         else:
             emit('face_search_error', {'message': 'Face recognition is offline.'}, room=sid)
